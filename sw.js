@@ -1,7 +1,7 @@
 /* 英语词汇 · 离线缓存
    只拦**同源**请求：联网加词 / 爬词补全走外部域名，原样放行，
    否则在线功能会被缓存逻辑吃掉。 */
-const CACHE = "evc-v2";
+const CACHE = "evc-v3";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest",
                 "./icon-180.png", "./icon-192.png", "./icon-512.png", "./favicon-32.png"];
 
@@ -30,8 +30,10 @@ self.addEventListener("fetch", e => {
   if (req.mode === "navigate"){
     e.respondWith(
       fetch(req).then(res => {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+        if (res && res.ok){                       // 404 不缓存，见根 sw.js 的说明
+          const copy = res.clone();
+          caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+        }
         return res;
       }).catch(() =>
         caches.match(req, { ignoreSearch: true })
