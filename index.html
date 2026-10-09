@@ -373,7 +373,7 @@
      只在有标记时才渲染（没有 content 的伪元素不会画出来）。 */
   .rowwrap:has(> .row.mastered)::before,
   .rowwrap:has(> .row.skipped)::before{
-    content:"";position:absolute;left:0;top:0;bottom:0;width:7px;
+    content:"";position:absolute;left:0;top:0;bottom:0;width:5.25px;
     z-index:2;pointer-events:none;
     border-radius:var(--cardr) 0 0 0}
   .rowwrap:has(> .row.mastered)::before{background:var(--green)}
@@ -422,8 +422,10 @@
    底边不画：要么由详情接着画，要么被下一张卡片压住。 */
 .rowwrap > .row{
   border-style:solid;
-  /* 厚边加粗（用户要求）：原 3px 3px 0 5px。竖条宽度要同步改，否则会错位。 */
-  border-width:4px 4px 0 7px;
+  /* 厚边比例（用户指定）：左边比原 7px 少四分之一 = 5.25px，
+     上边比原 4px 多二分之一 = 6px，右边 4px（已透明，由阴影承担），下边 0。
+     竖条宽度必须等于左边厚条，否则会错位。 */
+  border-width:6px 4px 0 5.25px;
   /* var() 都带后备色：万一变量取不到，也只会退成这个深色，
      而不会退成 currentColor（那会变成文字颜色，看起来是黄的）。 */
   /* 右边框改成透明（用户要求把那道竖条换成阴影）。宽度保持 3px，盒模型不变。 */
@@ -475,8 +477,8 @@
   border-style:solid;
   /* 顶边不画边框：边框斜接会横穿左右厚边。
      那条 1px 分隔线改由 ::before 画在内侧（见下）。 */
-  /* 与行同步加粗 */
-  border-width:0 4px 5px 7px;
+  /* 左边与行一致（5.25px），下边保持 5px */
+  border-width:0 4px 5px 5.25px;
   /* 同上：右边透明，改由 .rowwrap 的阴影承担 */
   border-color:transparent transparent var(--edge-dark, #080b13) var(--edge-lit, #46587f);
   border-radius:0 0 var(--cardr) var(--cardr)}
