@@ -213,7 +213,11 @@
     overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
   /* 靠右的「搜索/导入」开关：宽屏下面板常驻，按钮就没必要显示 */
-  .tab.sidebtn{margin-left:auto}
+  /* 用户要求：这个按钮不随页面滚动，固定在右下角。
+     z-index 35 低于右侧面板的 40 —— 面板打开时盖住它，避免互相压。 */
+  .tab.sidebtn{margin-left:auto;
+    position:fixed;right:18px;bottom:18px;z-index:35;
+    box-shadow:0 6px 18px rgba(0,0,0,.42)}
   .tab.sidebtn.on{background:var(--blue);border-color:var(--blue);color:#fff}
   @media (min-width:1400px){ .tab.sidebtn{display:none} }
   .tab{cursor:pointer;border:1px solid var(--line);background:var(--card);color:var(--dim);
@@ -369,7 +373,7 @@
      只在有标记时才渲染（没有 content 的伪元素不会画出来）。 */
   .rowwrap:has(> .row.mastered)::before,
   .rowwrap:has(> .row.skipped)::before{
-    content:"";position:absolute;left:0;top:0;bottom:0;width:5px;
+    content:"";position:absolute;left:0;top:0;bottom:0;width:7px;
     z-index:2;pointer-events:none;
     border-radius:var(--cardr) 0 0 0}
   .rowwrap:has(> .row.mastered)::before{background:var(--green)}
@@ -418,7 +422,8 @@
    底边不画：要么由详情接着画，要么被下一张卡片压住。 */
 .rowwrap > .row{
   border-style:solid;
-  border-width:3px 3px 0 5px;
+  /* 厚边加粗（用户要求）：原 3px 3px 0 5px。竖条宽度要同步改，否则会错位。 */
+  border-width:4px 4px 0 7px;
   /* var() 都带后备色：万一变量取不到，也只会退成这个深色，
      而不会退成 currentColor（那会变成文字颜色，看起来是黄的）。 */
   /* 右边框改成透明（用户要求把那道竖条换成阴影）。宽度保持 3px，盒模型不变。 */
@@ -470,7 +475,8 @@
   border-style:solid;
   /* 顶边不画边框：边框斜接会横穿左右厚边。
      那条 1px 分隔线改由 ::before 画在内侧（见下）。 */
-  border-width:0 3px 4px 5px;
+  /* 与行同步加粗 */
+  border-width:0 4px 5px 7px;
   /* 同上：右边透明，改由 .rowwrap 的阴影承担 */
   border-color:transparent transparent var(--edge-dark, #080b13) var(--edge-lit, #46587f);
   border-radius:0 0 var(--cardr) var(--cardr)}
