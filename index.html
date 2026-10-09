@@ -538,7 +538,7 @@
   .notepinwrap .pin{padding:2px 7px;min-width:0}
   .notebtn.on,.btn.mini.on{border-color:var(--blue);color:var(--blue)}
   /* 手写画布：touch-action:none 是必须的，否则一画就滚页面 */
-  canvas.notedraw{display:block;width:100%;box-sizing:border-box;
+  canvas.notedraw{display:block;width:100%;box-sizing:border-box;min-height:80px;
     background:var(--card2);border:1px solid var(--line);border-radius:9px;
     touch-action:none;cursor:crosshair}
   .notetext{width:100%;box-sizing:border-box;font-family:inherit;font-size:18px;
@@ -1943,7 +1943,17 @@ function redrawCanvas(box, w){
 /* 画布可用时才算初始化完成（隐藏时宽度是 0，尺寸会算错） */
 function initNoteCanvas(box, w){
   const cv = noteCanvasOf(box); if (!cv) return;
-  if (!cv.getBoundingClientRect().width){ cv.dataset.ready = ""; return; }
+  /* 宽度为 0 说明画布还隐藏着。这种情况不直接放弃，而是延后重试 ——
+     折叠/展开的瞬间样式重算与调用时机不保证一致，一次就放弃会留下空白画布。
+     最多重试 5 次（每次 60ms），仍不行才算没准备好。 */
+  if (!cv.getBoundingClientRect().width){
+    const tries = (+cv.dataset.retry || 0) + 1;
+    cv.dataset.retry = tries;
+    if (tries <= 5) setTimeout(() => initNoteCanvas(box, w), 60);
+    else cv.dataset.ready = "";
+    return;
+  }
+  cv.dataset.retry = "0";
   cv.dataset.ready = "1";
   redrawCanvas(box, w);
 }
@@ -2214,8 +2224,12 @@ function toggleDetail(wrap){
     if (det){
     if (det.classList.contains("open")){
       det.classList.remove("open");                 // 折叠：CSS 只留下 .pinned 的卡片
-      /* 常驻的手写画布可能刚由隐藏变可见（或反过来），重新量一次尺寸 */
+      /* 常驻的手写画布可能刚由隐藏变可见（或反过来），重新量一次尺寸。
+         只做一次 rAF 不够 —— 那一帧样式可能还没重算完，画布宽度仍是 0，
+         initNoteCanvas 的守卫会直接跳过，结果折叠后留一条空白带。
+         这里再补一次延时重试，等布局稳定。 */
       requestAnimationFrame(() => initNoteCanvases(wrap));
+      setTimeout(() => initNoteCanvases(wrap), 80);
       /* 一句都没标记、也没有常驻白板，才别留空壳 */
       if (!det.querySelector(".exrow.pinned") && !det.querySelector(".relbox.pinned")) det.remove();
     } else {
