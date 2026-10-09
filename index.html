@@ -444,6 +444,12 @@
   .row.cur{background:var(--card2)}
   /* 已记住 / 垃圾桶：颜色由左边条承担，单词本身保留词性配色，只降低不透明度 */
   /* 竖条改由容器外缘的 ::before 画（见下方 .rowwrap:has 那组） */
+  /* 常驻标记：单词行右上角一个 📌，表示这个词有内容被常驻。
+     加它的原因：常驻的效果只在折叠后才可见，桌面上详情默认展开，
+     点完 📌 屏幕上没有变化，用户以为"没反应"。有了这个角标，点完立刻能看到。 */
+  .row .rowpinned{display:none;position:absolute;top:5px;right:6px;
+    font-size:14px;line-height:1;color:var(--amber);pointer-events:none}
+  .row.hasnote-pin .rowpinned{display:block}
   .row.mastered .rw{opacity:.7}
   /* 同上 */
   .row.skipped .rw{opacity:.55}
@@ -579,6 +585,14 @@
   .rowdetail:not(.open) .relbox.pin-t .notetext{display:block}
   .rowdetail:not(.open) .relbox.pin-i .noteimgs{display:flex}
   .rowdetail:not(.open) .relbox.pin-d canvas.notedraw{display:block}
+  /* 折叠时露出来的这几段是**只读**的 ——
+     用户报告：常驻之后手指碰到、鼠标点上去还能继续写写画画，这不应该。
+     编辑只允许在详情展开（.open）时进行。
+     用 pointer-events 而不是 JS 开关：状态本来完全由 CSS 决定。 */
+  .rowdetail:not(.open) .relbox.pinned .notetext,
+  .rowdetail:not(.open) .relbox.pinned .noteimgs,
+  .rowdetail:not(.open) .relbox.pinned canvas.notedraw{
+    pointer-events:none;user-select:none;-webkit-user-select:none}
   .rowdetail:not(.open) .exrow.pinned{display:flex}
   .btn.mini.pin{opacity:.5;font-size:18px;padding:2px 7px}
   .btn.mini.pin:hover{opacity:1;color:var(--amber);border-color:var(--amber)}
@@ -2102,10 +2116,16 @@ function noteEditorHTML(d){
 function rowHTML(idx){
   const d = LIB[idx];
   const done = isMastered(d), skip = isSkipped(d);
+  /* 这个词有没有内容被常驻（白板的文字 / 图片 / 手写任一段）。
+     有就在行上显示一个 📌 角标 —— 常驻效果本来只在折叠后可见，
+     桌面上详情默认展开，点完 📌 屏幕上几乎没变化，用户会以为没反应。 */
+  const _np = (noteOf(d.w) || {}).pins;
+  const np = (_np && typeof _np === "object" && Object.keys(_np).length) ? " hasnote-pin" : "";
   return `
   <div class="rowwrap" data-i="${idx}">
     <div class="swipe-hint"><span class="sh-txt"></span><span class="sh-ico"></span></div>
-    <div class="row${done ? " mastered" : ""}${skip ? " skipped" : ""}${qHitSet.has(idx) ? " hit" : ""}" data-i="${idx}">
+    <div class="row${done ? " mastered" : ""}${skip ? " skipped" : ""}${qHitSet.has(idx) ? " hit" : ""}${np}" data-i="${idx}">
+      <span class="rowpinned" title="这个词有内容被常驻（折叠后仍显示）">📌</span>
       <div class="rmain">
         <span class="rw" style="${posStyle(d.pos)}">${d.w}</span>
         ${d.ipa ? `<span class="ripa">${d.ipa}</span>` : ""}
@@ -3165,6 +3185,11 @@ $("lib").addEventListener("click", async e => {
       box.classList.toggle("pin-t", !!p.t);
       box.classList.toggle("pin-i", !!p.i);
       box.classList.toggle("pin-d", !!p.d);
+      /* 行上的常驻角标也要跟着变。不写这句的话，角标要等整个列表重画才更新，
+         看起来就像"点了没反应" —— 这正是用户报的第二个问题。 */
+      const rw = box.closest(".rowwrap");
+      const rowEl = rw && rw.querySelector(".row");
+      if (rowEl) rowEl.classList.toggle("hasnote-pin", on2.length > 0);
     }
     noteStat(box, on ? `已常驻（${kind === "t" ? "文字" : kind === "i" ? "图片" : "手写"}）—— 折叠后仍然显示` : "已取消常驻", res.ok ? "ok" : "err");
   }
