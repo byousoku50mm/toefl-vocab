@@ -80,18 +80,18 @@
   /* 滚动条显式配色。
      Safari 的浮层滚动条压在列表右边，默认是偏暖的灰（实测 #8c817e），
      紧贴卡片右缘，看起来像卡片的阴影发黄。统一成跟主题一致的冷灰。 */
-  ::-webkit-scrollbar{width:12px;height:12px}
-  ::-webkit-scrollbar-track{background:transparent}
-  ::-webkit-scrollbar-thumb{
-    background:#2a3550;border-radius:6px;
-    border:3px solid transparent;background-clip:content-box}
-  ::-webkit-scrollbar-thumb:hover{background:#3d4d70;background-clip:content-box}
-  ::-webkit-scrollbar-corner{background:transparent}
+  /* 隐藏滚动条（但保留滚动）。
+     用户报「卡片右侧有黄色竖条」。采样确认它是滚动条：
+     3px 宽、暖灰 #877e70、纵贯整个列表并超出卡片范围。
+     这个颜色是 Safari 滚动条的默认色，只有常驻滚动条才会被绘制出来。
+     先试过 color-scheme: dark，没生效；常驻滚动条会套用 ::-webkit-scrollbar，
+     所以这里直接把它隐掉。滚动本身不受影响。
+     下面两条是标准属性，覆盖 Firefox 和旧 Edge。 */
+  ::-webkit-scrollbar{width:0;height:0;display:none}
+  html{scrollbar-width:none;-ms-overflow-style:none}
   /* 亮色主题的覆盖必须写在上面那条之后 —— 媒体查询不增加优先级，
      写在前面会被深色规则盖掉。 */
   @media (prefers-color-scheme: light){
-    ::-webkit-scrollbar-thumb{background:#b9c6dd;background-clip:content-box}
-    ::-webkit-scrollbar-thumb:hover{background:#9fb0cd;background-clip:content-box}
   }
   /* --- 离线就绪横幅 ---
      页面上唯一一处告诉用户"现在可以添加到主屏幕了"的地方。
