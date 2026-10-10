@@ -1,7 +1,7 @@
 {
-  "name": "英语词汇 · 4511 词",
-  "short_name": "英语词汇",
-  "description": "4511 词离线词库：音标、词性、释义、例句、近义反义、朗读、卡片分组。",
+  "name": "词汇发音 · 托福 4510 + TOPIK 韩语 5965",
+  "short_name": "托福 · TOPIK 词汇",
+  "description": "两套内置词库：托福英语 4510 词 + TOPIK 韩语 5965 词（含标准发音与音变、中文释义、例句、朗读、卡片分组）。",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
