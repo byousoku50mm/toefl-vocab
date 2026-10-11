@@ -512,6 +512,8 @@
     padding:8px 10px;margin:2px 0 8px;border-radius:10px;
     background:rgba(74,158,255,.08);border:1px solid var(--line)}
   .kobox .klab{font-size:15.5px;color:var(--dim)}
+  /* 标签后统一补全角冒号（用户要求）——只管 kobox 里的等宽标签，值本身不动 */
+  .kobox .klab::after{content:：}
   .kobox .kval{font-size:18.5px;color:var(--fg)}
   .kobox .kpron{font-size:20px;font-weight:700;color:var(--amber);
     font-family:"Lucida Sans Unicode",Georgia,serif}
@@ -555,10 +557,12 @@
   border-style:solid;
   /* 顶边不画边框：边框斜接会横穿左右厚边。
      那条 1px 分隔线改由 ::before 画在内侧（见下）。 */
-  /* 左边与行一致（5.25px），下边保持 5px */
-  border-width:0 4px 5px 5.25px;
-  /* 同上：右边透明，改由 .rowwrap 的阴影承担 */
-  border-color:transparent transparent var(--edge-dark, #080b13) var(--edge-lit, #46587f);
+  /* 左边与行一致（5.25px）。**下边不画**（用户要求删除）：从左上俯瞰时，
+     底边属于背光面，画出来会像一道亮色厚条，和受光关系矛盾；
+     卡片的厚度由左边受光边 + 右侧阴影承担即可。 */
+  border-width:0 4px 0 5.25px;
+  /* 右边透明，改由 .rowwrap 的阴影承担 */
+  border-color:transparent transparent transparent var(--edge-lit, #46587f);
   border-radius:0 0 var(--cardr) var(--cardr)}
 .rowdetail{position:relative;z-index:1;padding:10px 13px 12px;background:var(--expbg);
     border-top:1px solid var(--line);
