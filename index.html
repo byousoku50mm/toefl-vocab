@@ -514,6 +514,14 @@
   .kobox .klab{font-size:15.5px;color:var(--dim)}
   /* 标签后统一补全角冒号（用户要求）——只管 kobox 里的等宽标签，值本身不动 */
   .kobox .klab::after{content:：}
+  /* 日语界面的面板文案比中文长（一括インポート / ストレージを書き出す / 読み上げを停止…），
+     原来的字号 + nowrap 会顶出边框。只在**日语界面**下把面板里的字号收小、允许折行。 */
+  body.ui-ja .side button,body.ui-ja .side .btn,body.ui-ja .side .mkbtn{
+    font-size:13.5px;line-height:1.25;white-space:normal;height:auto;min-height:0;padding:6px 8px}
+  body.ui-ja .side .mkl{font-size:13.5px;line-height:1.25}
+  body.ui-ja .side .kbdrow{font-size:12.5px;line-height:1.6}
+  body.ui-ja .side kbd{font-size:11px;padding:1px 5px}
+  body.ui-ja .side .hint,body.ui-ja .side .side-title,body.ui-ja .side .ctxnote{font-size:12.5px}
   .kobox .kval{font-size:18.5px;color:var(--fg)}
   .kobox .kpron{font-size:20px;font-weight:700;color:var(--amber);
     font-family:"Lucida Sans Unicode",Georgia,serif}
