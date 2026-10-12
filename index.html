@@ -690,19 +690,24 @@
   /* ---------- 右侧固定面板 ---------- */
   .side{display:none;position:fixed;top:88px;right:18px;width:329px;z-index:40;
     background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;
-    box-shadow:0 12px 36px rgba(0,0,0,.30);max-height:calc(var(--vh100) - 120px);overflow-y:auto;overflow-x:hidden}
+    box-shadow:0 12px 36px rgba(0,0,0,.30);-webkit-overflow-scrolling:touch;max-height:calc(var(--vh100) - 120px);overflow-y:auto;overflow-x:hidden}
   /* 三段式：图标栏固定、中间分区自己滚、底部提示固定。
      原来整个面板一起滚，而分区标题 sticky 在 top:0（=面板顶部），
      滚动时会盖住图标栏 —— 用户报"点搜索后跳出的2级菜单盖住其他元素"。 */
   .side.open{display:flex;flex-direction:column;top:auto;bottom:14px;
-    max-height:min(72dvh,620px);overflow:hidden}
+    /* 老 WebView（<108）不认识 dvh，会把整条声明丢掉 —— 所以先写一条同值的 vh 兜底：
+       不认识的引擎用 vh，认识的用后面那条 dvh 覆盖。fitPanels() 是第二道兜底。 */
+    max-height:min(72vh,620px);max-height:min(72dvh,620px);overflow:hidden}
   .side > .mkbar{flex:0 0 auto}
   /* min-height:0 不能省：flex 子项默认最小高度是内容高度，
      不写它 .ssec 会撑破容器、overflow 不生效、滚不动。 */
+  /* -webkit-overflow-scrolling:touch 也不能省：安卓/iOS 的 WebView 里
+     没有它，面板内的滚动区在手指拖动时经常"黏住"不跟手（老引擎尤其明显）。 */
   /* 让章节自身铺到面板的 padding box（负外边距 15px + 等量内边距抵消）：
      这样搜索区的吸顶块 .stick 那对 -15px 外边距正好落在章节的边框盒里，
      既不会溢出（横向滚动条消失），分隔线也能铺满面板宽度。 */
   .side > .ssec{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;
+    -webkit-overflow-scrolling:touch;
     margin:0 -15px;padding:0 15px}
   /* 快捷键提示行不再画上边框 —— 用户要求去掉搜索区下面那条横线；间距也压小 */
   .side > .kbdrow{flex:0 0 auto;padding-top:0;margin-top:2px}
@@ -759,10 +764,17 @@
       .azbar{padding:6px;gap:3px;margin-bottom:7px}
     .side{left:10px;right:10px;width:auto}
     .side,.side.open{top:auto;bottom:0;left:10px;right:10px;width:auto;
-      max-height:80dvh;border-radius:18px 18px 0 0;
+      max-height:80vh;max-height:80dvh;border-radius:18px 18px 0 0;
       padding-bottom:calc(16px + env(safe-area-inset-bottom))}
     .colL{left:10px;right:10px;width:auto}
-    .colL,.colL.open{top:auto;bottom:0;left:10px;right:10px;width:auto;max-height:86dvh}
+    /* ⚠ 这一条是 .colL **唯一**的高度上限：老 WebView 丢了 dvh 之后，
+       .colL 只剩 top:auto/bottom:0，高度变成内容高度（实测 390×844、
+       80 条已记住 = 5902px，顶边跑到屏幕外 5058px），里面的 .mlist
+       clientHeight == scrollHeight，手指怎么划都不动 —— 用户报的"翻不动"。
+       所以 86vh 这条兜底不能省。（CSS 里不能出现反引号字面量，所以这里
+       类名不加代码格式。） */
+    .colL,.colL.open{top:auto;bottom:0;left:10px;right:10px;width:auto;
+      max-height:86vh;max-height:86dvh}
     .colL .sideL{border-radius:14px}
     /* 窄屏：名字区只收最小值，**不再设 max-width** —— 卡组名要完整显示 */
     .deckwrap .deck{min-width:104px;font-size:16px}
@@ -781,8 +793,14 @@
 .colL.open{display:flex}
 .sideP{flex:0 0 auto;background:var(--card);border:1px solid var(--line);
   border-radius:16px;padding:15px;box-shadow:0 12px 36px rgba(0,0,0,.30)}
+/* 左栏第二张卡：默认只有里面的 .mlist 滚（标题/按钮不动）。
+   overflow-y:auto 而不是 hidden —— 万一 .mlist 已经被压到 min-height:44px
+   还装不下（横屏高度特别小时会这样），整张卡自己还能滚，不至于有内容永远看不到。
+   min-height:0 同样不能省：flex 子项默认最小高度是内容高度，它的父级 .colL
+   一旦被 fitPanels() 或 86dvh 夹住，不写这行 .sideL 会反过来把父级撑破。 */
 .sideL{position:static;top:auto;left:auto;width:auto;max-height:none;z-index:auto;
-  flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow:hidden;
+  flex:1 1 auto;min-height:0;display:flex;flex-direction:column;overflow-y:auto;overflow-x:hidden;
+  -webkit-overflow-scrolling:touch;
   background:var(--card);border:1px solid var(--line);border-radius:16px;padding:15px;
   box-shadow:0 12px 36px rgba(0,0,0,.30)}
 /* 图标栏：常驻，一排小按钮 */
@@ -825,7 +843,10 @@
     border-radius:50%;border:none;cursor:pointer;font-size:26px;background:var(--green);color:#fff;
     display:flex;align-items:center;justify-content:center;box-shadow:0 8px 26px rgba(0,0,0,.34)}
   @media (min-width:1560px){ .sideL-toggle{display:none} }
-  .mlist{overflow-y:auto;flex:1;min-height:44px;margin:2px 0 0}
+  /* min-height 保持 44px（不是 0）：列表空的时候也要留一块可见区域，
+     否则底部那排按钮会跳到标题下面；它只是"下限"，不影响滚动。 */
+  .mlist{overflow-y:auto;flex:1;min-height:44px;margin:2px 0 0;
+    -webkit-overflow-scrolling:touch}
   .mrowwrap{position:relative;overflow:hidden;background:var(--card2);
     border-radius:9px;border:1px solid var(--line);margin-bottom:6px}
   .mrowwrap:last-child{margin-bottom:0}
@@ -1022,9 +1043,9 @@
     .ghead .btn{font-size:12px;padding:1px 7px}
     .row{padding:8px 10px 11px}
     .rowdetail{font-size:15px;padding:8px 10px 10px}
-    /* 横屏高度只有 300~400px，抽屉别只开一半 */
-    .side,.side.open{max-height:92dvh}
-    .colL,.colL.open{max-height:94dvh}
+    /* 横屏高度只有 300~400px，抽屉别只开一半（同样先给 vh 兜底再给 dvh） */
+    .side,.side.open{max-height:92vh;max-height:92dvh}
+    .colL,.colL.open{max-height:94vh;max-height:94dvh}
     /* 手机横屏宽度通常 700~900px，够用四列网格；但行高要更紧 */
     .rmain{line-height:1.25}
   }
@@ -1207,7 +1228,7 @@
     <span class="deckwrap">
     </span>
     <span class="deckwrap">
-      <button class="tab deck on" id="tabBulk"><span id="lblBulk">TOEFL</span> (<span id="bulkCount">0</span>)</button>
+      <button class="tab deck on" id="tabBulk"><span id="lblBulk">English</span> (<span id="bulkCount">0</span>)</button>
       <button class="tab deckmore" data-more="__bulk" title="这个列表的选项">⋯</button>
     </span>
     <!-- 内置的第二个列表：TOPIK（韩语）。和托福词汇并列，同属页面自带的默认数据 -->
@@ -2788,7 +2809,7 @@ window.VOCAB_JA_IELTS = { w: window.VOCAB_JA.ieltsW, ex: window.VOCAB_JA.ieltsEx
 /* 界面日语文案（由 tools/i18n/ui-zh.json 翻出）—— 键是中文原文，值是界面日语 */
 window.UI_JA = {
   "<br>⚠️ 本机存储不可用，本次标记可能不会被保存": "<br>⚠️ この端末のストレージが使えないため、今回のマークは保存されない可能性があります",
-  "TOPIK 韩语词库是页面自带数据，不能清空；要清空请在「TOEFL」标签下操作。": "TOPIK 韓国語単語帳はページ内蔵のデータなので消去できません。消去するには「TOEFL」タブで操作してください。",
+  "TOPIK 韩语词库是页面自带数据，不能清空；要清空请在「English」标签下操作。": "TOPIK 韓国語単語帳はページ内蔵のデータなので消去できません。消去するには「English」タブで操作してください。",
   "IELTS 雅思词库是页面自带数据，不能清空；要清空请在「TOEFL」标签下操作。": "IELTS 単語帳はページ内蔵のデータなので消去できません。消去するには「TOEFL」タブで操作してください。",
   "file:// 打开无法离线缓存：请用网址访问一次，再「添加到主屏幕」": "file:// で開くとオフラインキャッシュできません：URL で一度アクセスしてから「ホーム画面に追加」してください",
   "■ 停止": "■ 停止",
@@ -3014,13 +3035,14 @@ window.UI_JA = {
   "共 {n} 个词": "全 {n} 語",
   "{n}　·　命中 {n}": "{n}　·　一致 {n}",
   "已占用约 {n} KB 存储空间。": "約 {n} KB のストレージを使用しています。",
-  "删除卡组「{n}」？\\n\\n只删除这个分组，里面的单词仍然留在「TOEFL」中。": "デッキ「{n}」を削除？\\n\\n削除されるのはこのグループだけ。中の単語は「TOEFL」に残ります。",
+  "删除卡组「{n}」？\\n\\n只删除这个分组，里面的单词仍然留在「English」中。": "デッキ「{n}」を削除？\\n\\n削除されるのはこのグループだけ。中の単語は「English」に残ります。",
   "TOEFL · {n} 词": "TOEFL · {n} 語",
   "✏️　重命名": "✏️　名前を変更",
   "📤　导出这个列表": "📤　このリストをエクスポート",
   "📥　打开导入 / 搜索面板": "📥　インポート／検索パネルを開く",
   "内置标签，不能删除。日语默认隐藏（词条 + 例句，例句为常体）": "組み込みタグのため削除できません。日本語は既定で非表示（見出し語 + 例文、例文は常体）",
   "TOPIK · {n} 词": "TOPIK · {n} 語",
+  "英语（托福+雅思） · {n} 词": "英語（TOEFL+IELTS） · {n} 語",
   "🔍　打开搜索面板": "🔍　検索パネルを開く",
   "内置标签，不能删除。汉字／日语默认隐藏 —— 中文释义已经写明了意思": "組み込みタグのため削除できません。漢字／日本語は既定で非表示 —— 中国語の意味で十分です",
   "{n} · {n} 词": "{n} · {n} 語",
@@ -3070,7 +3092,7 @@ window.UI_JA = {
   "　·　例句覆盖 {n} / {n}": "　·　例文カバー {n} / {n}",
   "　·　命中 {n}": "　·　一致 {n}",
   "已占用约 <b>{n} KB</b> 存储空间。": "約 <b>{n} KB</b> のストレージを使用しています。",
-  "删除卡组「{n}」？\n\n只删除这个分组，里面的单词仍然留在「TOEFL」中。": "デッキ「{n}」を削除？\n\n削除されるのはこのグループだけ。中の単語は「TOEFL」に残ります。",
+  "删除卡组「{n}」？\n\n只删除这个分组，里面的单词仍然留在「English」中。": "デッキ「{n}」を削除？\n\n削除されるのはこのグループだけ。中の単語は「English」に残ります。",
   "已识别 <b>{n}</b> 条有效词条": "有効な項目を <b>{n}</b> 件認識しました",
   "已从备份恢复：新增 <b>{n}</b> 条": "バックアップから復元：<b>{n}</b> 件を追加",
   "　⚠️ 保存失败：{n}": "　⚠️ 保存に失敗：{n}",
@@ -3103,20 +3125,24 @@ window.UI_JA = {
 /* ============================================================
    一、精选词库（含趣味例句）
    ============================================================ */
-/* 内置标签的显示名。用户要求默认就叫 TOEFL / TOPIK（不带图标、不带"词汇"）。
+/* 内置标签的显示名。用户要求默认叫 English / TOPIK（不带图标、不带"词汇"）。
    原来还有第三项 ielts:"IELTS" —— 托福与雅思合并成一套词库、IELTS 标签整体撤掉后，
    这里不再有它的位置（标签行、计数、⋯ 菜单、switchLib/setView 分支全部一并清理）。 */
 const LKEY = "evc_labels_v1";
-const LABELS_DEF = { bulk: "TOEFL", ko: "TOPIK" };
+const LABELS_DEF = { bulk: "English", ko: "TOPIK" };
 /* 改默认名时把**历次旧默认值**记在这里（每个键一个数组）：存档里等于旧默认值的，
    视为"用户没改过"，于是会跟着显示新默认名 —— 否则已经存过旧值的设备永远看不到新名字，
-   而用户自己改过的名字要原样保留。 */
+   而用户自己改过的名字要原样保留。
+   bulk 的历次旧默认名就在下面这个数组里（完整词库 → 托福词汇 → TOEFL，
+   最新默认名是 English）。
+   "TOEFL" 这一条不能漏：APK / 手机上早就存过 evc_labels_v1={"bulk":"TOEFL"}，
+   少了它那些设备会永远停在旧名字上，看不到 English。 */
 /* 雅思这一项一上线就叫 IELTS，没有更早的默认名，所以它的旧值表是空的
    （判定逻辑一字未动：空数组 ⇒ 存档里那条永远保留原样）。
    IELTS 标签撤掉后这条**故意留着**：老设备的存档里可能还有 ielts:"IELTS"，
-   旧值表空 ⇒ 它既不会被当成"没改过"删掉、也不会影响 TOEFL/TOPIK 两个标签的显示；
+   旧值表空 ⇒ 它既不会被当成"没改过"删掉、也不会影响 English/TOPIK 两个标签的显示；
    万一以后要恢复雅思标签，那份用户改名也还在。 */
-const LABELS_OLD = { bulk: ["📚 完整词库", "📚 托福词汇"], ko: ["📚 TOPIK 词汇"], ielts: [] };
+const LABELS_OLD = { bulk: ["📚 完整词库", "📚 托福词汇", "TOEFL"], ko: ["📚 TOPIK 词汇"], ielts: [] };
 let LABELS = Object.assign({}, LABELS_DEF);
 function loadLabels(){
   try{
@@ -4897,6 +4923,7 @@ function setUiLang(lang){
   renderAll();
   syncUiLangBtn();
   applyUiLang();
+  fitPanels();          // 文案换成日语后普遍变长，面板高度会变，重新兜一次
 }
 /* ⋯ 菜单里的语言开关：当前语言排在前面，所以字样随语言变。
    中文界面按用户要求写「界面语言：中文 / 日本語」；
@@ -5832,7 +5859,10 @@ function updateListStat(){
 
 function updateStoreHint(){
   let n = 0;
-  try{ n = (localStorage.getItem(KEY) || "").length; }catch(e){ n = -1; }
+  /* 看的是**差异键** LIBDKEY：词库早就不整份落盘了（只存 removed/added）。
+     原来读的是已经废弃的 KEY（那两处 removeItem(KEY) 之后它恒为 0 字符），
+     于是这行一直显示"已占用约 0 KB"，等于白写。 */
+  try{ n = (localStorage.getItem(LIBDKEY) || "").length; }catch(e){ n = -1; }
   if (n < 0){ $("storeHint").innerHTML = "⚠️ 本机存储不可用（可能是 file:// 限制）。导入的词只在本次会话有效，请用「导出备份」保存。"; return; }
   $("storeHint").innerHTML = tFmt("已占用约 <b>{n} KB</b> 存储空间。", (n/1024).toFixed(0));
 }
@@ -5901,8 +5931,8 @@ function renameDeck(id){
 }
 function deleteDeck(id){
   const d = deckById(id); if (!d) return;
-  /* 只删分组，词还在托福词汇里 —— 所以确认语里说清楚，避免误会 */
-  if (!confirm(tFmt("删除卡组「{n}」？\n\n只删除这个分组，里面的单词仍然留在「TOEFL」中。", d.name))) return;
+  /* 只删分组，词还在英语词库里 —— 所以确认语里说清楚，避免误会 */
+  if (!confirm(tFmt("删除卡组「{n}」？\n\n只删除这个分组，里面的单词仍然留在「English」中。", d.name))) return;
   DECKS = DECKS.filter(x => x.id !== id);
   saveDecks();
   if (view === "deck:" + id) setView("bulk"); else renderDeckTabs();
@@ -7159,7 +7189,7 @@ function showSection(sec){
   $("mkBtnM").classList.toggle("on", marksOpen && markTab === "mastered");
   $("mkBtnS").classList.toggle("on", marksOpen && markTab === "skipped");
 }
-$("markClose").addEventListener("click", () => { showSection(""); renderMarkList(); });
+$("markClose").addEventListener("click", () => { showSection(""); renderMarkList(); fitPanels(); });
 /* 委托到 .colL —— 「朗读设置」按钮在 #mkBar 外面，
    挂在 #mkBar 上收不到它的点击（用户报"点了没反应"就是这个原因）。
    挂到共同容器上，以后再加按钮也不会漏。 */
@@ -7172,8 +7202,91 @@ $("colL").addEventListener("click", e => {
   const collapse = b.classList.contains("on");
   showSection(collapse ? "" : sec);
   renderMarkList();
+  fitPanels();          // 已记住 / 垃圾桶列表展开后内容高度变了，重新兜一次
 });
 showSection("");          // 初始全部收起
+
+/* ============================================================
+   面板高度兜底：fitPanels()
+   ------------------------------------------------------------
+   为什么需要（用户报告：APK / 安卓 WebView 里左栏「已记住」面板往下翻不动）：
+     手机块里给 `.colL` 设高度上限的**只有** `.colL.open{max-height:86dvh}` 这一条。
+     `dvh` 要 Chrome/WebView 108+，老 WebView 不认识它 → 整条声明被丢弃 →
+     `.colL` 只剩 top:auto/bottom:0，高度变成内容高度。
+     实测（390×844、80 条已记住）：`.colL` 高 5902px、顶边 -5058px（跑到屏幕外），
+     里面的 `.mlist` clientHeight == scrollHeight == 5194 → **没有可滚动的余量**，
+     手指怎么划都不动 —— 这正是"面板翻不动、看不到下面的内容"。
+   做法（刻意**不**依赖任何 CSS 特性检测）：
+     不用 CSS.supports（height:100dvh）当判据 —— 老 WebView 里它可能返回
+     false 甚至压根没有这个方法。改成量**真实几何**：
+       ① 收起（display:none）的面板直接清掉内联值，不管；
+       ② 实际高度 > 可用高度，并且满足下面任意一条，就写内联
+          `max-height = 可用高度 px`：
+            · 完全没有可用的 max-height（none / 解析失败）—— 老 WebView 丢了 dvh 的样子；
+            · 盒子真的伸出了视口（top < 0 或 bottom > innerHeight）——
+              安卓可视视口比布局视口矮时（地址栏/键盘）会这样；
+            · 上一轮就是我们夹的（说明还在需要夹的状态里）。
+       ③ 其它一律**清掉内联值** —— 不能永久锁死，窗口变大 / 转横屏要能自己恢复。
+   为什么不看"上下双锚点"：`getComputedStyle(el).top` 对定位元素返回的是**算出来的
+     像素值**（不是 "auto"），所以"top/bottom 都不是 auto"这个判据在手机上会把
+     `.colL.open{top:auto;bottom:0}` 也误判成双锚点 —— 于是什么都不夹。
+     改成只认"真的伸出了视口"（rect.top < 0 或 rect.bottom > innerHeight）：
+     桌面左栏 1280×900 时高 798px、上边 88px、下边 886px，本来就没出屏，
+     自然不会被夹；手机老 WebView 那种 5902px / 上边 -5058px 才会被夹。
+   幂等：用 WeakMap 记住"这个内联值是我们写的、写的是多少"。可用高度没变就直接
+     跳过（不重复写、不叠加，也不会把已夹住的元素误判成"不用夹"而清掉 ——
+     早期版本"先清后量"就会这样来回抖）。
+   触发点：启动、resize、orientationchange、开关面板、切换分区/标签/界面语言。
+   ============================================================ */
+const FIT_MINE = new WeakMap();     // 面板元素 -> 我们给它写的 max-height 像素值（0 = 没写）
+function fitPanels(){
+  const vh = window.innerHeight || (document.documentElement && document.documentElement.clientHeight) || 0;
+  if (!vh) return;
+  /* 可用高度：横屏（对着 CSS 那条 orientation:landscape and (max-height:560px)）用 94%，
+     其它用 86% —— 和手机块里的 80~86dvh 同一量级，正好卡在面板原本的设计高度上。 */
+  let land = false;
+  try{
+    land = !!(window.matchMedia && window.matchMedia("(orientation:landscape) and (max-height:560px)").matches);
+  }catch(e){}
+  if (!land) land = (window.innerWidth > window.innerHeight && vh <= 560);
+  const avail = Math.round(vh * (land ? 0.94 : 0.86));
+  const list = document.querySelectorAll(".side,.colL,.sideL");
+  for (let i = 0; i < list.length; i++){
+    const el = list[i];
+    if (!el.offsetWidth){                       // ① 收起的（display:none）面板：清干净走人
+      if (el.style.maxHeight) el.style.maxHeight = "";
+      FIT_MINE.delete(el);
+      continue;
+    }
+    const mine = FIT_MINE.get(el) || 0;
+    /* 已经按当前可用高度夹好了、而且那个内联值还在 → 什么都不做（幂等、零重排）。
+       多问一句 el.style.maxHeight 是否还在：万一别人（页面别处/调试）把它抹掉了，
+       这里要能重新夹回去，不能因为"记着夹过"就放过。 */
+    if (mine === avail && el.style.maxHeight === avail + "px") continue;
+    const rect = el.getBoundingClientRect();
+    const cs = window.getComputedStyle(el);
+    const cssMax = parseFloat(cs.maxHeight);
+    const noCssCap = !isFinite(cssMax) || cssMax <= 0;      // none / 解析失败
+    const overflow = rect.top < -1 || rect.bottom > vh + 1; // 真的伸出视口了
+    const tooTall = rect.height > avail;
+    /* 上一轮就是我们夹的（mine>0）→ 可用高度变了（键盘/转屏/地址栏）就按新值重夹 */
+    const need = tooTall && (mine > 0 || overflow || (noCssCap && rect.height > vh));
+    if (need){
+      el.style.maxHeight = avail + "px";        // ② 夹到可用高度
+      FIT_MINE.set(el, avail);
+    } else {
+      el.style.maxHeight = "";                  // ③ 清掉，交给 CSS（也不永久锁死）
+      FIT_MINE.set(el, 0);
+    }
+  }
+}
+/* resize / orientationchange：转屏后 innerHeight 不是立刻更新的，稍后再量两次 */
+window.addEventListener("resize", fitPanels);
+window.addEventListener("orientationchange", () => {
+  fitPanels();
+  setTimeout(fitPanels, 120);
+  setTimeout(fitPanels, 400);
+});
 
 /* ---------- 右栏分区：和左栏同一套手风琴 ---------- */
 function showSideSection(sec){
@@ -7188,6 +7301,7 @@ function showSideSection(sec){
     const btn = $("sb" + k);
     if (btn) btn.classList.toggle("on", s === k.toLowerCase());
   }
+  fitPanels();                     // 分区一换，面板内容高度就变了，重新兜一次
 }
 $("sideBar").addEventListener("click", e => {
   const b = e.target.closest(".mkbtn");
@@ -7204,6 +7318,7 @@ function syncPanels(){
   $("sideToggle").classList.toggle("on", sideOn);
   $("scrim").classList.toggle("on", on);
   document.body.style.overflow = on ? "hidden" : "";   // 面板打开时锁住背景
+  fitPanels();          // 面板一开一关高度就变了：开的时候兜一次，关的时候把内联值清掉
 }
 $("sideToggle").addEventListener("click", () => { $("side").classList.toggle("open"); syncPanels(); });
 $("sideLToggle").addEventListener("click", () => { $("colL").classList.toggle("open"); syncPanels(); });
@@ -7318,6 +7433,7 @@ function setView(v){
   renderDeckTabs();
   doFilter();
   updateListStat();
+  fitPanels();          // 切标签/卡组会换词库，面板里的内容高度跟着变
 }
 $("tabBulk").addEventListener("click", () => setView("bulk"));
 $("tabKo").addEventListener("click", () => setView("ko"));
@@ -7812,7 +7928,7 @@ $("exportBtn").addEventListener("click", () => {
 $("clearBtn").addEventListener("click", () => {
   /* 韩语词库是页面自带的默认数据，只读：只能清空用户自己的英语词库 */
   if (curLang === "ko"){
-    $("storeHint").innerHTML = "TOPIK 韩语词库是页面自带数据，不能清空；要清空请在「TOEFL」标签下操作。";
+    $("storeHint").innerHTML = "TOPIK 韩语词库是页面自带数据，不能清空；要清空请在「English」标签下操作。";
     return;
   }
   /* 原来这里还有一条针对雅思态的护栏（雅思标签自带数据，不许清）。
@@ -7956,6 +8072,8 @@ renderChrome();
 renderAll();
 setView(curLang === "ko" ? "ko" : "bulk");
 applyUiLang();
+/* 启动后再兜一次面板高度（setView 里已经调过一次，这里补上字体/文案排完版后的最终一次） */
+fitPanels();
 
 
 </script>
