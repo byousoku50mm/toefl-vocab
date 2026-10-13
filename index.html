@@ -2857,7 +2857,7 @@ window.UI_JA = {
   "写点什么：文字 / emoji / 图片": "何か書いてください：文字／emoji／画像",
   "删掉这张": "この1枚を削除",
   "加粗": "太字",
-  "勿混词": "混同しやすい語",
+  "勿混词": "混同しやすい単語",
   "单词": "単語",
   "单词 / 音标 / 中文释义…": "単語 / 発音記号 / 意味…",
   "反义词": "対義語",
@@ -3038,6 +3038,7 @@ window.UI_JA = {
   "不规则表": "不規則変化表",
   "标记为已记住": "覚えたとマーク",
   "移出卡组": "デッキから外す",
+  "原型": "原形",
   "关闭": "閉じる",
   "在本列表中筛选…": "このリスト内を絞り込み…",
   "填入 3 行示例": "3行のサンプルを入力",
@@ -3558,12 +3559,16 @@ function byWord(w){
   }
   return byWordCache.get(String(w).toLowerCase()) || null;
 }
-/* 详情区顶部的「原型：xxx」提示；没有原型时返回空串 */
+/* 详情区顶部的「原型：xxx」提示；没有原型时返回空串。
+   标签**走 t()**，不靠 DOM 层那套"整条文本节点完全相等才替换"：
+   「原型：」的冒号就在这个文本节点里，一旦哪天冒号被拆成独立节点
+   （或改成 CSS ::after 提供），整条键就永远匹配不上，日语界面会露中文。
+   两种界面下渲染结果不变（中文「原型：」/ 日语「原形：」）。 */
 function baseLineHTML(d){
   const b = BASE_OF[String(d.w).toLowerCase()];
   if (!b) return "";
   const bd = byWord(b);
-  return `<div class="dbase">原型：
+  return `<div class="dbase">${t("原型：")}
     <button class="basebtn" data-base="${escHtml(b)}" title="点击跳到这个词">${escHtml(b)}</button>
     ${bd ? `<span class="bmeta">${posHTML(bd.pos)} ${uiLang === "ja" ? jaMeanHTML(bd) : meanHTML(bd.pos, bd.mean, bd.w)}</span>` : ""}
   </div>`;
@@ -5164,7 +5169,10 @@ function koHeadHTML(d){
 
 /* 详情卡的「用法」一行（数据来自 vocab-usage.js）：
    位置在释义之后、例句之前；只有表里有这个词才出这一行。
-   标签「用法」中日两种界面同一个词，但仍走 t() 查 ui-ja.js 的词表。 */
+   标签「用法」中日两种界面同一个词，但仍走 t() 查 ui-ja.js 的词表。
+   标签后面那个冒号**必须**是全角「：」（U+FF1A）：中日两界面写法一致，
+   且它是独立文本节点，不会被 t("用法") 的译文影响 —— 换成半角 ':' 就会跟
+   界面其余部分（原型：/漢字：/…）不一致，validate-page 里有一条断言钉着它。 */
 function usageLineHTML(d){
   if (!d || d.lang === "ko") return "";                      // 韩语词条没有这份数据
   const u = VOCAB_USAGE[String(d.w).toLowerCase()];
