@@ -3039,6 +3039,8 @@ window.UI_JA = {
   "标记为已记住": "覚えたとマーク",
   "移出卡组": "デッキから外す",
   "原型": "原形",
+  "点击隐藏": "クリックで非表示",
+  "点击临时显示该组": "クリックでこのグループを一時表示",
   "关闭": "閉じる",
   "在本列表中筛选…": "このリスト内を絞り込み…",
   "填入 3 行示例": "3行のサンプルを入力",
@@ -5102,7 +5104,9 @@ function relHTML(d){
     if (!arr || !arr.length) return "";
     const chips = arr
     .filter(x => !DROPED.has(String(x).toLowerCase()))     // 已删的词不做成按钮
-    .map(x => `<button class="relchip" data-rel="${escAttr(x)}" title="跳到「${escAttr(x)}」">${escHtml(x)}</button>`)
+    /* title 必须走 tFmt：表里的键是模式串「跳到「{n}」」，
+       先插值再写进属性的话，属性值永远不等于那个键 → 日语界面下 title 一直露中文。 */
+    .map(x => `<button class="relchip" data-rel="${escAttr(x)}" title="${escAttr(tFmt("跳到「{n}」", x))}">${escHtml(x)}</button>`)
     .join("");
     return `<div class="relrow"><span class="rellabel">${label}</span>${chips}</div>`;
   };
@@ -5143,7 +5147,8 @@ function koHeadHTML(d){
     parts.push(lab("다른 발음") + `<span class="kalt">[${d.prAlt.map(escHtml).join("] [")}]</span>`);
   if (d.hw) parts.push(lab("활용") + `<span class="kconj">${escHtml(d.hw)}</span>`);
   if (d.hj && showKoHanja) parts.push(lab("한자") + `<span class="kval">${escHtml(d.hj)}</span>`);
-  if (uiLang === "ja" && jaOfWord(d)) parts.push(lab("日本語") + `<span class="kval">${escHtml(jaOfWord(d))}</span>`);
+  /* 这里原本还有一格「日本語」标签（日语界面下把日语释义塞进韩语标签栏）。
+     行内释义（.rmean）在日语界面本来就是日语 → 重复，用户要求去掉（见下面 def 那一段）。 */
   if (d.g) parts.push(lab("등급") + `<span class="kval">${escHtml(d.g)}</span>`);
   if (d.rank) parts.push(lab("빈도") + `<span class="kval">${escHtml(String(d.rank))}위</span>`);
   const box = `<div class="kobox">${parts.join("")}</div>`;
@@ -5151,13 +5156,11 @@ function koHeadHTML(d){
   const kdZh = d.kdZh || "";
   let def = "";
   if (uiLang === "ja"){
-    /* 日语界面：中文对照那一格整段不要，这里改成日语释义；没有日语就不出这一段。
-       韩文原文（kd）是词条自带的词典释义、不是中文，保留在下面作对照。 */
-    const jw = jaOfWord(d);
-    if (jw) def = `<div class="kdef"><b>日本語</b> ` +
-          `<span class="kzh">${escHtml(jw)}</span>` +
-          (kd ? `<span class="kdorig">${escHtml(kd)}</span>` : "") +
-          `</div>`;
+    /* 日语界面：中文对照那一格整段不要（它只在中文界面出现）。
+       日语释义**不再单列一行**（行内释义已经是日语，用户要求去掉这行重复）。
+       韩文原文（kd）不是中文、也不是行内释义的重复，保留下来作对照；
+       没有韩文原文时这一段整段不出（行内释义已经把日语给了）。 */
+    if (jaOfWord(d) && kd) def = `<div class="kdef"><span class="kdorig">${escHtml(kd)}</span></div>`;
   } else if (kdZh || kd){
     def = `<div class="kdef"><b>뜻풀이</b> ` +
           (kdZh ? `<span class="kzh">${escHtml(kdZh)}</span>` : "") +
@@ -5183,10 +5186,11 @@ function usageLineHTML(d){
 function detailHTML(idx){
   const d = LIB[idx];
   const ex = exOf(d);
-  /* 英语词条的详情头：中文界面**不放**日语那一格；日语界面只放日语释义
-     （没有对应日语就什么都不放，不回退到中文） */
-  const head = (d.lang === "ko" ? koHeadHTML(d) + baseLineHTML(d) : baseLineHTML(d) +
-      (uiLang === "ja" && jaOfWord(d) ? `<div class="kdef"><b>日本語</b> <span class="kzh">${escHtml(jaOfWord(d))}</span></div>` : "")) + usageLineHTML(d);
+  /* 英语词条的详情头：日语界面**不再单列「日本語 …」行** ——
+     行内释义（.rmean）在日语界面本来就是日语，那一行纯属重复（用户要求去掉）。
+     中文界面本来就不放日语格，所以两种界面都不放了；去掉的只是那一行，
+     行内释义（jaMeanHTML）、例句（jaOfEx）、用法行都不受影响。 */
+  const head = (d.lang === "ko" ? koHeadHTML(d) + baseLineHTML(d) : baseLineHTML(d)) + usageLineHTML(d);
   if (!ex) return `<div class="rowdetail open" data-i="${idx}">${head}这个词还没有例句。${relHTML(d)}</div>`;
   const rows = ex.map((s, j) => {
     const on = isPinned(d.w, j);
