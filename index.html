@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  离线单文件版 · 由 tools/make-standalone.js 生成于 2026-10-13
+  离线单文件版 · 由 tools/make-standalone.js 生成于 2026-10-14
   把两套词库的全部数据（托福 4510 词 + TOPIK 韩语 5965 词，含例句 / 词性 / 词根 /
   近义反义 / 删除表 / 韩语标准发音与音变）内联进了本文件。
   直接双击就能用，不需要联网、不需要服务器，macOS / Windows / iPad / iPhone / Android 均可。
@@ -3256,6 +3256,16 @@ try{
 let view = "bulk";
 let filtered = [];            // 当前筛选命中的 LIB 下标（分组的来源）
 let stopFlag = false;
+/* ---------- 朗读的「这一轮」令牌（voiceGen） ----------
+   为什么必须有它：speak() 里在 synth.cancel() 之后要等一下（iOS 会把紧跟 cancel 的
+   那句吞掉），排队的那一句是在**await 之后**才真正交给语音层的。用户在这 70ms 里
+   点「停止」，stopFlag 只挡得住循环的下一句，挡不住**已经排队**的那一句 ——
+   它照样会 synth.cancel() + synth.speak()。原生 TTS 收到这句后会立刻把上一句切掉
+   （AndroidTTS.stop() 冲刷队列），用户听到的就是"只念出单词的首字母，然后跳到下一个"；
+   而这句话已经走到 speak() 里面，stopFlag 拦不住它，于是"停不下来"。
+   令牌的规则：每一轮朗读/每次「停止」都 ++；speak() 在开始时认领当时的号，
+   await 回来发现号变了就直接退出（一个字都不交出去）。 */
+let voiceGen = 0;
 const $ = id => document.getElementById(id);
 const strip = s => (s || "").replace(/<[^>]+>/g, "");
 
@@ -6416,6 +6426,9 @@ function unlockSpeech(){
     u.volume = 0; u.rate = 2;             // 空字符串 + 静音，听不见
     synth.speak(u);
     synth.cancel();
+    /* 这次「空念 + 取消」不能把已经在跑的那一轮朗读作废 ——
+       只有用户点「停止」和「另开一轮」才该让 voiceGen 前进。 */
+    voiceGen++;
   }catch(e){}
   loadVoices();
   setTimeout(loadVoices, 300);
@@ -6460,6 +6473,9 @@ function exForRead(d){
 
 async function speak(text, {btn=null, row=null, card=null, rate=null, cancel=true} = {}){
   if (!synth || !text) return;
+  /* 认领「这一轮」的号：下面 await 醒来时号变了 = 期间点了停止或又开了一轮朗读，
+     这一句就不许再交出去（否则就是用户听到的"停了还在念/只念首字母"）。 */
+  const gen = voiceGen;
   unlockSpeech();                        // 首次点击顺带解锁（幂等）
   if (cancel){
     synth.cancel();
@@ -6467,10 +6483,11 @@ async function speak(text, {btn=null, row=null, card=null, rate=null, cancel=tru
        其它浏览器这 70ms 基本无感。 */
     await sleep(70);
   }
+  if (gen !== voiceGen) return;          // ← 排队期间被「停止」/新一轮作废：一个字都不交
   /* iOS 从后台回来会卡在 paused，之后一直不出声 */
   if (synth.paused) synth.resume();
   return new Promise(resolve => {
-    if (!synth || !text) return resolve();
+    if (!synth || !text || gen !== voiceGen) return resolve();
     const u = new SpeechSynthesisUtterance(text);
     const v = voiceFor(text);
     if (v) u.voice = v;
@@ -6482,7 +6499,12 @@ async function speak(text, {btn=null, row=null, card=null, rate=null, cancel=tru
       if (row) row.classList.add("cur");
       if (card) card.classList.add("speaking");
     };
+    /* done 必须**只生效一次**：原生 shim 在 error 时会先 onerror 再补 onend，
+       两个都 resolve 会让同一句被后面的队列重复算一遍。 */
+    let settled = false;
     const done = () => {
+      if (settled) return;
+      settled = true;
       if (btn) btn.classList.remove("playing");
       if (row) row.classList.remove("cur");
       if (card) card.classList.remove("speaking");
@@ -6507,6 +6529,8 @@ function playMp3(url, btn){
 
 function stopEverything(){
   stopFlag = true;
+  voiceGen++;                            // 作废已经排队、还没交给语音层的那一句
+  window.__ttsChunk = null;              // 原生批量那条路径的逐词高亮回调也不再收
   if (synth) synth.cancel();
   if (mp3){ mp3.pause(); mp3 = null; }
   document.querySelectorAll(".playing").forEach(b => b.classList.remove("playing"));
@@ -6521,7 +6545,12 @@ async function playSequence(onlyWord){
   const targets = filtered.slice(0, limit);
   if (!targets.length) return;
   stopFlag = false;
+  /* 开新一轮 = 作废旧一轮还在排队的那一句（见 voiceGen 的说明）。
+     放在 targets 判空之后：空列表直接 return，不该顺手作废别人的朗读。 */
+  const myGen = ++voiceGen;
   const btn = $("playList"); btn.classList.add("playing");
+  /* 本轮是否已经失效（点了停止、或又开了一轮） */
+  const dead = () => stopFlag || myGen !== voiceGen;
 
   /* ── App 里（有原生 TTS 桥）：把整段**一次性**交给原生队列 ──────────
      页面原本是一句一句 await 着念的，节奏靠 WebView 里的 JS 定时器；
@@ -6564,7 +6593,13 @@ async function playSequence(onlyWord){
       $("curPos").textContent = tFmt("朗读中 {n}/{n}", k + 1, targets.length);
     };
     $("curPos").textContent = tFmt("朗读中 {n}/{n}", 1, targets.length);
-    await speak(lines.join("\n"), {});
+    try{
+      await speak(lines.join("\n"), {});
+    }catch(e){}
+    /* 这一轮如果已经被「停止」作废：原生队列已经在 stopEverything 里靠
+       synth.cancel() → AndroidTTS.stop() 冲掉了，这里绝不能再把状态收尾写回去
+       （否则会把用户刚点出来的新状态覆盖掉）。 */
+    if (myGen !== voiceGen) return;
     window.__ttsChunk = null;
     if (lastRow) lastRow.classList.remove("cur");
     $("curPos").textContent = "";
@@ -6574,7 +6609,7 @@ async function playSequence(onlyWord){
   }
 
   for (let k = 0; k < targets.length; k++){
-    if (stopFlag) break;
+    if (dead()) break;
     const idx = targets[k];
     const row = ensureRow(idx);        // 该词所在分组若没展开/没渲染，先展开并渲染出来
     if (row) row.scrollIntoView({ block:"center", behavior:"smooth" });
@@ -6582,20 +6617,23 @@ async function playSequence(onlyWord){
     /* 每个词念两遍，中间稍作停顿（用户要求），再进下一个词 */
     await speak(LIB[idx].w, { row });
     await sleep(320);
-    if (stopFlag) break;
+    if (dead()) break;                 // 停顿期间点了停止：不再念第二遍
     await speak(LIB[idx].w, { row });
     /* 例文：按选择读 0 / 1 / 2 / 全部 条（和原生那条路径同一个来源 exForRead）。
        「只读单词」按钮仍然强制 0 条。 */
     if (!onlyWord){
-      for (const s of exForRead(LIB[idx])){
+      const exs = exForRead(LIB[idx]);   // 每字一句：先在停顿之前取好，避免取值时机漂移
+      for (const s of exs){
         await sleep(320);
-        if (stopFlag) break;
+        if (dead()) break;
         await speak(s.en, { row });
       }
     }
-    if (stopFlag) break;
+    if (dead()) break;
     await sleep(420);
   }
+  /* 已经作废的那一轮不许碰 UI/标志位：一轮新的朗读可能正在跑 */
+  if (myGen !== voiceGen) return;
   $("curPos").textContent = "";
   btn.classList.remove("playing");
   stopFlag = false;
