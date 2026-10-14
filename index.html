@@ -6416,20 +6416,33 @@ if (voiceSel) voiceSel.addEventListener("change", () => { VOICE_PICK[voiceLang()
 /* ---------- 移动端（尤其 iOS）语音解锁 ----------
    iOS 要求音频由用户手势解锁：不先解锁的话，第一次 speak() 会静默失败，
    看起来就像「点了没反应」。这里在**第一次**触摸/按键时做一次听不见的空朗读，
-   顺便把语音列表再抓几次（iOS 的 getVoices 在手势前是空的）。 */
+   顺便把语音列表再抓几次（iOS 的 getVoices 在手势前是空的）。
+
+   ！！两个坑，都实测过（tools/shots/readaloud-verify-*.txt）：
+   ① 这句空念的内容就是那个「只有一个空格」的段（volume=0 / rate=2，听不见）。
+      浏览器里必须留着（iOS 解锁靠它）；**App 里不用**——那边是原生 TTS，
+      不受手势限制，而这句会以 " " 的原文走到原生桥上（TtsBridge 会直接丢掉，
+      但没必要发），所以有原生桥时整段跳过，只留取语音列表那几步。
+   ② 它里面的 voiceGen++ 就是"这次空念+取消别把在跑的那一轮作废"。
+      调用方必须**先**解锁、**再**认领本轮令牌（见 speak() 和 playSequence()）：
+      反过来写的话，页面加载后第一次朗读（没有先行 pointerdown/touchstart，
+      例如读屏器/语音控制"直接激活"按钮）会被这一句自己的 ++ 作废 ——
+      结果一声不吭，而且按钮卡在「朗读中 1/4」不恢复。 */
 let speechUnlocked = false;
 function unlockSpeech(){
   if (speechUnlocked || !synth) return;
   speechUnlocked = true;
-  try{
-    const u = new SpeechSynthesisUtterance(" ");
-    u.volume = 0; u.rate = 2;             // 空字符串 + 静音，听不见
-    synth.speak(u);
-    synth.cancel();
-    /* 这次「空念 + 取消」不能把已经在跑的那一轮朗读作废 ——
-       只有用户点「停止」和「另开一轮」才该让 voiceGen 前进。 */
-    voiceGen++;
-  }catch(e){}
+  if (!window.AndroidTTS){                 /* App 里没有手势限制，不用发这句 */
+    try{
+      const u = new SpeechSynthesisUtterance(" ");
+      u.volume = 0; u.rate = 2;             // 空字符串 + 静音，听不见
+      synth.speak(u);
+      synth.cancel();
+      /* 这次「空念 + 取消」不能把已经在跑的那一轮朗读作废 ——
+         只有用户点「停止」和「另开一轮」才该让 voiceGen 前进。 */
+      voiceGen++;
+    }catch(e){}
+  }
   loadVoices();
   setTimeout(loadVoices, 300);
   setTimeout(loadVoices, 1200);
@@ -6473,10 +6486,12 @@ function exForRead(d){
 
 async function speak(text, {btn=null, row=null, card=null, rate=null, cancel=true} = {}){
   if (!synth || !text) return;
+  /* 先解锁再认领令牌（顺序不能反，见 unlockSpeech 的说明）：解锁那句自己会 ++，
+     认领在它之后，这一句就不会被自己人作废。 */
+  unlockSpeech();                        // 首次点击顺带解锁（幂等）
   /* 认领「这一轮」的号：下面 await 醒来时号变了 = 期间点了停止或又开了一轮朗读，
      这一句就不许再交出去（否则就是用户听到的"停了还在念/只念首字母"）。 */
   const gen = voiceGen;
-  unlockSpeech();                        // 首次点击顺带解锁（幂等）
   if (cancel){
     synth.cancel();
     /* iOS：cancel() 之后立刻 speak() 会把这一句吞掉，中间必须留一点间隔。
@@ -6545,6 +6560,11 @@ async function playSequence(onlyWord){
   const targets = filtered.slice(0, limit);
   if (!targets.length) return;
   stopFlag = false;
+  /* ！！先解锁，再认领本轮令牌：unlockSpeech 里那次"空念+取消"自己会 ++voiceGen，
+     先认领的话它就把**刚开的这一轮**当场作废 —— 一声不吭、按钮还卡在「朗读中」。
+     （页面加载后第一下就点「开始朗读」，若这一下没有 pointerdown/touchstart
+       先行触发解锁，就会走到这里。） */
+  unlockSpeech();
   /* 开新一轮 = 作废旧一轮还在排队的那一句（见 voiceGen 的说明）。
      放在 targets 判空之后：空列表直接 return，不该顺手作废别人的朗读。 */
   const myGen = ++voiceGen;
