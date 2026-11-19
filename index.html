@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  离线单文件版 · 由 tools/make-standalone.js 生成于 2026-10-16
+  离线单文件版 · 由 tools/make-standalone.js 生成于 2026-11-19
   把两套词库的全部数据（托福 4510 词 + TOPIK 韩语 5965 词，含例句 / 词性 / 词根 /
   近义反义 / 删除表 / 韩语标准发音与音变）内联进了本文件。
   直接双击就能用，不需要联网、不需要服务器，macOS / Windows / iPad / iPhone / Android 均可。
@@ -23,7 +23,7 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="英语词汇">
-<title>英语词汇发音·搜索·批量导入</title>
+<title>猫猫学英韩语</title>
 <style>
   :root{
   /* 让浏览器用**深色**画滚动条。Safari 的浮层滚动条（overlay scrollbar）不套用
@@ -1236,7 +1236,7 @@
 
 <div class="wrap">
   <div class="hdr">
-    <h1 id="hdrTitle">🔊 英语词汇发音 · 搜索 · 批量导入</h1>
+    <h1 id="hdrTitle">🐱 猫猫学英韩语 · 发音 · 搜索 · 批量导入</h1>
 
   </div>
 
@@ -3052,6 +3052,10 @@ window.UI_JA = {
   "原型": "原形",
   "点击隐藏": "クリックで非表示",
   "点击临时显示该组": "クリックでこのグループを一時表示",
+  "已取消保存。": "保存をキャンセルしました。",
+  "猫猫学英韩语": "猫猫学英韓語",
+  "🐱 猫猫学英韩语 · 发音 · 搜索 · 批量导入": "🐱 猫猫学英韓語 · 発音 · 検索 · 一括インポート",
+  "🐱 猫猫学英韩语 · 发音 · 搜索 · 音变标注": "🐱 猫猫学英韓語 · 発音 · 検索 · 音変化表記",
   "关闭": "閉じる",
   "在本列表中筛选…": "このリスト内を絞り込み…",
   "填入 3 行示例": "3行のサンプルを入力",
@@ -3183,6 +3187,8 @@ window.UI_JA = {
   " 等 {n} 个": " ほか {n} 件",
   "，其中 {n} 条当前处于不再显示状态": "、うち {n} 件は現在非表示です",
   "{n} → {n}（{n}，已按原型加入）": "{n} → {n}（{n}、原形で追加しました）",
+  "保存失败：{n}": "保存に失敗しました：{n}",
+  "（文件名 {n}；在系统「文件」App 的「下载」或你刚选的文件夹里。）": "（ファイル名 {n}。端末の「ファイル」アプリの「ダウンロード」、またはいま選んだフォルダーにあります。）",
   "新卡组的名字（可含 emoji，留空则无图标）：": "新しいデッキの名前（emoji 可。空欄ならアイコンなし）：",
   "清空这个词的手写？文字和图片不受影响。": "この単語の手書きを消去しますか？文字と画像はそのまま残ります。",
   "清空这个词的白板？文字和图片都会删掉。": "この単語のメモボードを消去しますか？文字も画像も削除されます。",
@@ -5066,8 +5072,9 @@ if (typeof window !== "undefined" && typeof window.confirm === "function"){
      桩把 renderAll 换成了记录调用的空函数。） */
 function syncDocTitle(){
   if (typeof document === "undefined" || !document) return;
-  const ko = (typeof curLang !== "undefined") && curLang === "ko";
-  document.title = t(ko ? "韩语词汇发音·搜索·音变标注" : "英语词汇发音·搜索·批量导入");
+  /* 站点名固定是「猫猫学英韩语」（用户指定的名字），不随词库/界面语言变。
+     走 t() 是为了日语界面下标签页也跟着翻（中文界面 t() 直接返回原文）。 */
+  document.title = t("猫猫学英韩语");
 }
 
 function rowHTML(idx){
@@ -5677,8 +5684,8 @@ function renderChrome(){
   if (document.body && document.body.classList) document.body.classList.toggle("lang-ko", ko);
   /* 变量名不能叫 t —— 那是全局的界面文案翻译函数（t / tFmt），会被这个名字遮住 */
   const hdr = $("hdrTitle");
-  if (hdr) hdr.textContent = ko ? "🔊 韩语词汇发音 · 搜索 · 音变标注"
-                                : "🔊 英语词汇发音 · 搜索 · 批量导入";
+  if (hdr) hdr.textContent = ko ? "🐱 猫猫学英韩语 · 发音 · 搜索 · 音变标注"
+                                : "🐱 猫猫学英韩语 · 发音 · 搜索 · 批量导入";
   const q = $("q");
   if (q) q.placeholder = ko ? "韩语单词 / 发音 / 中文释义…" : "单词 / 音标 / 中文释义…";
   const lg = $("posLegend");
@@ -5850,7 +5857,12 @@ function markAs(idx, kind){
     // 从 filtered 和所属分组里同时摘掉，保证计数一致
     const pos = filtered.indexOf(idx);
     if (pos >= 0) filtered.splice(pos, 1);
-    const L = (d.w[0] || "#").toUpperCase();
+    /* 分组键必须用 letterOf()，不能自己取首字母：
+       韩语组是按**初声**（ㄱ/ㄴ/ㄷ…）分的，词是「가게」，首字母却是「가」——
+       自己取首字母就永远找不到那个组，组头那个「N 词」也就不会更新
+       （用户报的「划走卡片后上面的词数不变、点一下别处才对」就是这一条）。
+       英语下两者恰好相同，所以只有韩语态露馅。 */
+    const L = letterOf(d.w);
     const g = groups.find(x => x.letter === L);
     if (g){
       const gi = g.idxs.indexOf(idx);
@@ -5867,6 +5879,11 @@ function markAs(idx, kind){
         if (gi2 >= 0) groups.splice(gi2, 1);
       }
     }
+    /* 顶部 A-Z 导航条上的数字是**另一份**渲染（renderAZBar 里整条重建的），
+       只改组头文本的话它还停在旧数字上 —— 划走一张卡后「C735」纹丝不动，
+       要等下一次整表重画才对。这里顺手把它也刷新掉。
+       放在删组之后：整组标完时那块 chip 也该跟着消失。 */
+    renderAZBar();
     // 展开的例句块和常驻区都要一并移除
     $("lib").querySelectorAll(`.rowdetail[data-i="${idx}"]`).forEach(e => e.remove());
     if (wrap){
@@ -6267,6 +6284,58 @@ function baseFixSummary(fixes){
   return tFmt("，其中 {n} 个按原型加入（{n}）", list.length, shown + (list.length > 3 ? tFmt(" 等 {n} 个", list.length) : ""));
 }
 
+/* ============================================================
+   把一段文本存成文件 —— 一套接口，两条路
+   ------------------------------------------------------------
+   网页版 / PWA（浏览器里）：Blob + <a download>，文件真的会落到
+     「下载」目录。这条路一直是对的，保持不动。
+
+   安卓 App：WebView **不处理 blob: 下载**。壳子里没有 DownloadListener，
+     a.click() 什么都不会发生 —— 文件根本不存在，可页面照样打印了
+     「已导出 N 条到 CSV」。这就是「手机上导出备份、提示已导出、却
+     哪儿都找不到 CSV」的根因。
+     所以 App 里改走原生 AndroidSave.saveText()：系统弹「保存到…」，
+     用户自己挑位置；只有原生把字节真正写完，才回调下面的
+     window.__onSaveDone，页面到那时才敢说「已导出」。
+   ============================================================ */
+let savePending = null;
+
+/* 原生侧写完后回调（取消也会回调，cancelled=true） */
+window.__onSaveDone = function (r){
+  const cb = savePending;
+  savePending = null;
+  if (!cb) return;
+  cb(r && typeof r === "object" ? r : { ok: false, err: "未知错误" });
+};
+
+/* onDone 收到：{ok:true, name} / {ok:false, cancelled:true} / {ok:false, err:"…"} */
+function saveTextFile(text, filename, onDone){
+  const done = typeof onDone === "function" ? onDone : function(){};
+  const nat = window.AndroidSave;
+  if (nat && typeof nat.saveText === "function"){
+    savePending = done;
+    let started;
+    try { started = nat.saveText(filename, "text/csv", text) !== false; }
+    catch (e){ started = false; }
+    if (!started){
+      savePending = null;
+      done({ ok: false, err: "保存对话框没有打开" });
+    }
+    return;
+  }
+  try {
+    const blob = new Blob([text], { type: "text/csv;charset=utf-8" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    done({ ok: true, browser: true, name: filename });
+  } catch (e){
+    done({ ok: false, err: String((e && e.message) || e) });
+  }
+}
+
 /* 导出一个卡组（CSV，列与「导出备份」一致，可直接再导入） */
 function exportDeck(id){
   const dk = deckById(id); if (!dk) return;
@@ -6286,12 +6355,13 @@ function exportRows(title, rows){
   const head = ko ? ["单词", "标准发音", "词性", "中文释义"] : ["单词", "音标", "词性", "释义"];
   const out = [head.map(esc).join(",")];
   for (const d of rows) out.push([d.w, d.ipa, d.pos, d.mean].map(esc).join(","));
-  const blob = new Blob(["\uFEFF" + out.join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = title + "-" + rows.length + ".csv";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+  saveTextFile("\uFEFF" + out.join("\r\n"), title + "-" + rows.length + ".csv", r => {
+    if (r.cancelled) return;
+    const el = $("listStat");
+    if (el) el.innerHTML = r.ok
+      ? tFmt("已导出 <b>{n}</b> 条到 CSV。", rows.length)
+      : tFmt("保存失败：{n}", r.err || "未知错误");
+  });
 }
 
 /* 卡组标签上的右键菜单（复用 #ctxMenu） */
@@ -7464,13 +7534,14 @@ $("mExport").addEventListener("click", () => {
   const esc = s => '"' + String(s == null ? "" : s).replace(/"/g, '""') + '"';
   const rows = [["单词", "音标", "词性", "释义"].map(esc).join(",")];
   for (const d of all) rows.push([d.w, d.ipa, d.pos, d.mean].map(esc).join(","));
-  const blob = new Blob(["\uFEFF" + rows.join("\r\n")], { type: "text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = (markTab === "mastered" ? "mastered-" : "skipped-") + all.length + ".csv";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  renderMarkList();
+  saveTextFile("\uFEFF" + rows.join("\r\n"),
+    (markTab === "mastered" ? "mastered-" : "skipped-") + all.length + ".csv", r => {
+      renderMarkList();                       /* 先重画列表，别让提示立刻被冲掉 */
+      if (r.cancelled) return;
+      $("mStat").innerHTML = r.ok
+        ? tFmt("已导出 <b>{n}</b> 条到 CSV。", all.length)
+        : tFmt("保存失败：{n}", r.err || "未知错误");
+    });
 });
 /* ---------- 左栏分区：点图标展开对应的一块（手风琴，同时只开一个） ---------- */
 function showSection(sec){
@@ -8217,13 +8288,15 @@ $("exportBtn").addEventListener("click", () => {
   const rows = [(ko ? ["单词","标准发音","词性","中文释义"] : ["单词","音标","词性","释义"]).map(esc).join(",")];
   const src = ko ? koreanLib() : LIB_EN;
   for (const d of src) rows.push([d.w, d.ipa, d.pos, d.mean].map(esc).join(","));
-  const blob = new Blob(["\uFEFF" + rows.join("\r\n")], { type:"text/csv;charset=utf-8" });
-  const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
-  a.download = (ko ? "topik-vocab-" : "my-vocab-") + src.length + ".csv";
-  document.body.appendChild(a); a.click(); a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-  $("storeHint").innerHTML = tFmt("已导出 <b>{n}</b> 条到 CSV。", src.length);
+  const name = (ko ? "topik-vocab-" : "my-vocab-") + src.length + ".csv";
+  saveTextFile("\uFEFF" + rows.join("\r\n"), name, r => {
+    const h = $("storeHint");
+    if (r.cancelled){ h.textContent = t("已取消保存。"); return; }
+    if (!r.ok){ h.innerHTML = tFmt("保存失败：{n}", r.err || "未知错误"); return; }
+    /* 浏览器只会「交给下载」；App 里是原生真的写完了，能把文件名和大概位置说清楚 */
+    h.innerHTML = tFmt("已导出 <b>{n}</b> 条到 CSV。", src.length)
+      + (r.browser ? "" : tFmt("（文件名 {n}；在系统「文件」App 的「下载」或你刚选的文件夹里。）", r.name || name));
+  });
 });
 $("clearBtn").addEventListener("click", () => {
   /* 韩语词库是页面自带的默认数据，只读：只能清空用户自己的英语词库 */
