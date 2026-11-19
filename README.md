@@ -20,7 +20,7 @@
 `index.html` 双击就能打开，但 **file:// 下没有 service worker** ——
 要真正离线，必须通过一个 **https** 网址访问过一次。
 
-Android 也可以直接装 `english-vocab.apk`（调试签名，词库全部打在包里，装完即离线可用）。
+Android 也可以直接装 `猫猫学英韩语.apk`（调试签名，词库全部打在包里，装完即离线可用）。
 
 ## 你的数据在哪
 
@@ -36,4 +36,4 @@ Android 也可以直接装 `english-vocab.apk`（调试签名，词库全部打�
 | `sw.js` | service worker，负责离线缓存 |
 | `manifest.webmanifest` | 「添加到主屏幕」用的应用信息 |
 | `icon-*.png` `favicon-32.png` | 主屏幕图标 |
-| `english-vocab.apk` | Android 安装包（调试签名，可直接装）|
+| `猫猫学英韩语.apk` | Android 安装包（调试签名，可直接装）|
