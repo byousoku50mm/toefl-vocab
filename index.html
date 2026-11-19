@@ -447,6 +447,14 @@
   /* 「跳到某个词」时的短暂高亮 */
   @keyframes rowflash{0%{background:rgba(77,157,255,.30)}70%{background:rgba(77,157,255,.30)}100%{background:var(--card)}}
   .row.flash{animation:rowflash 1.9s ease-out}
+  /* 从「已记住 / 垃圾桶」撤销后：画面滚到这张卡，再左右抖两下。
+     闪色在这个位置容易被当成"加载中"，抖动更像"就是这张，回来了"。 */
+  @keyframes rowshake{
+    0%,100%{transform:translateX(0)}
+    15%,45%,75%{transform:translateX(-7px)}
+    30%,60%,90%{transform:translateX(7px)}
+  }
+  .row.shake{animation:rowshake .62s cubic-bezier(.36,.07,.19,.97) both}
   .row:hover{background:var(--card2)}
   .row.cur{background:var(--card2)}
   /* 已记住 / 垃圾桶：颜色由左边条承担，单词本身保留词性配色，只降低不透明度 */
@@ -3931,8 +3939,15 @@ function saveMarks(){
     return true;
   }catch(e){ return false; }
 }
-const isMastered = d => MASTERED.has(d.w.toLowerCase());
-const isSkipped  = d => SKIPPED.has(d.w.toLowerCase());
+/* 标记的键 = 词形 + 汉字 + 词性。
+   为什么精确到卡：同一个词形在列表里可能是**两张卡**（감사하다 형용사 / 동사、
+   병 病 / 瓶子）。只按词形存标记的话，划走一张会把另一张也一起带走 ——
+   用户要求「划一张卡，就只有那一张消失」。
+   老数据（纯词形、没有 "|"）照旧认：读到就当成"这个词的卡都标记过"，
+   下次标记/取消时会自然升级成按键存。 */
+const markKey = d => String(d.w).toLowerCase() + "|" + String(d.hj || "") + "|" + String(d.pos || "");
+const isMastered = d => MASTERED.has(markKey(d)) || MASTERED.has(String(d.w).toLowerCase());
+const isSkipped  = d => SKIPPED.has(markKey(d)) || SKIPPED.has(String(d.w).toLowerCase());
 const isMarked   = d => isMastered(d) || isSkipped(d);
 const currentSet = () => markTab === "mastered" ? MASTERED : SKIPPED;
 
@@ -5618,16 +5633,11 @@ function ensureRow(idx){
 /* 跳到某个词：展开它所在的字母组、滚动过去并短暂高亮。
    **绝不改动搜索框** —— 早先的做法是把原型词写进搜索框，
    结果用户当前的筛选结果被整个替换掉，表现为「单词大量消失」。 */
-function jumpToWord(word){
-  const target = String(word || "").toLowerCase();
-  if (!target) return false;
-  const idx = LIB.findIndex(d => d.w.toLowerCase() === target);
-  if (idx < 0) return false;
+/* 滚到某一张卡，并给它加个动画（默认 flash 高亮，取消标记时用 "shake" 抖一下）。
+   按**下标**定位：同一个词形可能有两张卡，按词形找会跳到错的那张。 */
+function jumpToRow(idx, cls){
+  if (!(idx >= 0) || idx >= LIB.length) return false;
   if (filtered.indexOf(idx) < 0) return false;      // 不在当前筛选结果里：宁可不跳，也不清空列表
-  /* 只有「精选卡片」是独立视图需要切走。
-     写成 view !== "bulk" 会在卡组视图里把用户踢回「托福词汇」——
-     而这里的词本来就在当前 filtered 里（即当前视图看得见），不该切。 */
-  
   /* 与 A-Z 条一致的手风琴：跳过去时只留目标所在的字母组。
      否则从别的组跳过来会出现两个组同时展开，目标反而被挤到视野外。 */
   const LJ = letterOf(LIB[idx].w);
@@ -5638,15 +5648,26 @@ function jumpToWord(word){
   }
   const row = ensureRow(idx);                        // 该行可能还没渲染到
   if (!row) return false;
+  const anim = cls || "flash";
   const go = () => {
     row.scrollIntoView({ block: "center", behavior: "smooth" });
-    row.classList.add("flash");
-    clearTimeout(jumpToWord._t);
-    jumpToWord._t = setTimeout(() => row.classList.remove("flash"), 1900);
+    row.classList.add(anim);
+    clearTimeout(jumpToRow._t);
+    jumpToRow._t = setTimeout(() => row.classList.remove(anim), 1900);
   };
   // 行可能是刚插入的，等一帧让布局稳定后再滚动
   if (typeof requestAnimationFrame === "function") requestAnimationFrame(go); else go();
   return true;
+}
+function jumpToWord(word){
+  const target = String(word || "").toLowerCase();
+  if (!target) return false;
+  const idx = LIB.findIndex(d => d.w.toLowerCase() === target);
+  if (idx < 0) return false;
+  /* 只有「精选卡片」是独立视图需要切走。
+     写成 view !== "bulk" 会在卡组视图里把用户踢回「托福词汇」——
+     而这里的词本来就在当前 filtered 里（即当前视图看得见），不该切。 */
+  return jumpToRow(idx);
 }
 
 function renderAll(){
@@ -5740,17 +5761,22 @@ function switchLib(lang){
 const MMAX = 400;   // 面板里最多渲染多少条（多的用筛选框找）
 function markListWords(){
   const set = currentSet();
+  const isIn = markTab === "mastered" ? isMastered : isSkipped;
   /* 不再显示的词也不该出现在「已记住 / 垃圾桶」面板里 ——
      已存在的标记保持原样（我们不去动那份存储），只是显示时隐藏优先。 */
-  /* 按**词形**去重：标记本来就是按词形存的，同形词条（감사하다 형용사 / 동사）
-     会给同一个词渲染出两条一模一样的行，而徽标只算 1 个词 —— 对不上。
-     这里只留第一条，面板行数与徽标一致。 */
-  const seen = new Set();
+  /* 标记是**按卡**存的，所以同形词条（감사하다 형용사 / 동사）各占一行，这是对的。
+     但老数据存的是整词（纯词形），那种情况下同一个词只会列第一张卡，免得出现两行一模一样的。 */
+  const seenLegacy = new Set();
   return visibleEntries().filter(d => {
+    if (!isIn(d)) return false;
+    if (set.has(markKey(d))) return true;          // 这张卡自己标记的
     const w = String(d.w).toLowerCase();
-    if (!set.has(w) || seen.has(w)) return false;
-    seen.add(w);
-    return true;
+    if (set.has(w)){                               // 老数据的整词标记
+      if (seenLegacy.has(w)) return false;
+      seenLegacy.add(w);
+      return true;
+    }
+    return false;
   });
 }
 const TAB_LABEL = { mastered: "已记住", skipped: "垃圾桶" };
@@ -5782,10 +5808,14 @@ function renderMarkList(){
   let list = q ? all.filter(d => (d.w + " " + d.mean).toLowerCase().includes(q)) : all;
   const truncated = list.length > MMAX;
   if (truncated) list = list.slice(0, MMAX);
+  /* 每行要带回 LIB 下标：同一个词形可能有两张卡，撤消/朗读都得对上是哪一张。
+     建一次映射，别在 map 里逐行 indexOf（6000 词 × 400 行会卡）。 */
+  const idxOf = new Map();
+  LIB.forEach((d, i) => idxOf.set(d, i));
 
   $("mList").innerHTML = list.length
     ? list.map(d => `
-      <div class="mrowwrap" data-w="${d.w.replace(/"/g, "&quot;")}">
+      <div class="mrowwrap" data-w="${d.w.replace(/"/g, "&quot;")}" data-i="${idxOf.get(d)}">
         <div class="mrowhint right"><span class="sh-txt">移回主列表</span><span class="sh-ico">↩</span></div>
         <div class="mrow${isM ? "" : " skip"}">
           <button class="btn mini" data-mact="say" title="朗读">🔊</button>
@@ -5843,33 +5873,30 @@ function renderMarkList(){
   }
 }
 
-/* 标记某个词：kind = "mastered" | "skipped"（两类互斥；再点一次 = 取消标记）
-   opts.noToggle —— 划卡片进来时用。同一个词形可能有多张卡（同形词条：
-   감사하다 有 형용사 / 동사 两条），而标记是按**词形**存的：
-   划第二张时绝不能当成"再点一次取消"，否则两张卡会一起弹回列表
-   （用户报的「划进已记住又立马恢复原状」就是这一条）。 */
+/* 标记一张卡：kind = "mastered" | "skipped"（同一张卡两类互斥；再点一次 = 取消标记）
+   opts.noToggle —— 划卡片进来时用。标记是按「词形 + 汉字 + 词性」这一张卡存的，
+   同一个词形的另一张卡不受影响（用户要求：划一张就只消失一张）。
+   但"再划一张已经标记过的卡"绝不能当成取消，否则刚划进去的会弹回来。 */
 function markAs(idx, kind, opts){
   const d = LIB[idx];
   if (!d) return;
-  const w = d.w.toLowerCase();
-  const set = kind === "mastered" ? MASTERED : SKIPPED;
+  const w = String(d.w).toLowerCase();
+  const k = markKey(d);
+  const set   = kind === "mastered" ? MASTERED : SKIPPED;
+  const other = kind === "mastered" ? SKIPPED : MASTERED;
   const noToggle = !!(opts && opts.noToggle);
   let saved = true;
 
-  if (set.has(w)){
-    if (!noToggle){ unmark(d.w); return; }   // 卡片上的按钮再点一次 = 取消
-    /* 已经标记过：标记与计数都不动，只把这一行收掉 */
+  if (set.has(k) || set.has(w)){
+    if (!noToggle){ unmark(idx); return; }   // 卡片上的按钮再点一次 = 取消
+    /* 已经标记过：标记与计数都不动，只把这张卡收掉 */
   } else {
-    MASTERED.delete(w); SKIPPED.delete(w);   // 互斥
-    set.add(w);
+    /* 互斥：同一张卡不能同时在两个集合里。
+       顺带把老数据的"整词标记"（纯词形）换成这张卡的键。 */
+    other.delete(k); other.delete(w);
+    set.delete(w);
+    set.add(k);
     saved = saveMarks();
-  }
-
-  /* 同一个词形的**所有**卡一起收走。只收被划的那一张的话，
-     另一张会留在列表里，下次划它就走进了上面的取消分支。 */
-  const sameIdx = [];
-  for (let k = 0; k < LIB.length; k++){
-    if (String(LIB[k].w).toLowerCase() === w) sameIdx.push(k);
   }
 
   const wrap = $("lib").querySelector(`.rowwrap[data-i="${idx}"]`);
@@ -5888,14 +5915,11 @@ function markAs(idx, kind, opts){
     const L = letterOf(d.w);
     const g = groups.find(x => x.letter === L);
     if (g){
-      let gone = 0;
-      for (const ix of sameIdx){
-        const pos = filtered.indexOf(ix);
-        if (pos >= 0){ filtered.splice(pos, 1); gone++; }
-        const gi = g.idxs.indexOf(ix);
-        if (gi >= 0) g.idxs.splice(gi, 1);
-      }
-      if (gone) groupShown[L] = Math.max(0, (groupShown[L] || 0) - gone);
+      const pos = filtered.indexOf(idx);
+      if (pos >= 0) filtered.splice(pos, 1);
+      const gi = g.idxs.indexOf(idx);
+      if (gi >= 0) g.idxs.splice(gi, 1);
+      if (gi >= 0) groupShown[L] = Math.max(0, (groupShown[L] || 0) - 1);
       const cnt = $("lib").querySelector(`.group[data-letter="${L}"] [data-gcount]`);
       /* 「N 词」必须走 tFmt：直接拼 " 词" 的话，日语界面下这个计数会露中文 */
       if (cnt) cnt.textContent = tFmt("{n} 词", g.idxs.length);
@@ -5912,13 +5936,7 @@ function markAs(idx, kind, opts){
        要等下一次整表重画才对。这里顺手把它也刷新掉。
        放在删组之后：整组标完时那块 chip 也该跟着消失。 */
     renderAZBar();
-    // 同形词条的另一张卡：直接摘掉（被划的那张下面还有收拢动画接力）
-    for (const ix of sameIdx){
-      if (ix === idx) continue;
-      $("lib").querySelectorAll(`.rowwrap[data-i="${ix}"]`).forEach(e => e.remove());
-      $("lib").querySelectorAll(`.rowdetail[data-i="${ix}"]`).forEach(e => e.remove());
-    }
-    // 展开的例句块和常驻区都要一并移除
+    // 展开的例句块和常驻区都要一并移除（只针对被划走的这张卡）
     $("lib").querySelectorAll(`.rowdetail[data-i="${idx}"]`).forEach(e => e.remove());
     if (wrap){
       /* 行已经滑出屏幕了，这里再把 wrap 收起来 —— 两段动画接力，去向看得更清楚 */
@@ -5944,15 +5962,35 @@ function markAs(idx, kind, opts){
   if (!saved) $("mStat").innerHTML += t("<br>⚠️ 本机存储不可用，本次标记可能不会被保存");
 }
 
-/* 移回主列表（取消标记） */
-function unmark(word){
-  const w = String(word).toLowerCase();
-  const a = MASTERED.delete(w);
-  const b = SKIPPED.delete(w);
-  if (!a && !b) return;
+/* 移回主列表（取消标记）。
+   target 可以传 LIB 下标（卡片、面板行都按"卡"传），也可以传词形字符串。
+   移回之后：先收起盖在列表上的面板，再把画面滚到这张卡并抖一下 ——
+   用户要求「点撤销后直接定位到被撤销的那张卡」。 */
+function unmark(target){
+  const d = (typeof target === "number")
+    ? LIB[target]
+    : LIB.find(x => String(x.w).toLowerCase() === String(target).toLowerCase());
+  if (!d) return false;
+  const idx = LIB.indexOf(d);
+  const w = String(d.w).toLowerCase();
+  const k = markKey(d);
+  let hit = false;
+  /* 键与"老数据整词标记"两种都清掉，免得取消不干净 */
+  if (MASTERED.delete(k)) hit = true;
+  if (MASTERED.delete(w)) hit = true;
+  if (SKIPPED.delete(k)) hit = true;
+  if (SKIPPED.delete(w)) hit = true;
+  if (!hit) return false;
   saveMarks();
+
+  /* 面板是盖在列表上的抽屉（手机上是底部弹层）：不收起就看不见卡片 */
+  if ($("sideL") && $("sideL").style.display === "flex") showSection("");
+
   doFilter();
   renderMarkList();
+  const go = () => jumpToRow(idx, "shake");
+  if (typeof requestAnimationFrame === "function") requestAnimationFrame(go); else go();
+  return true;
 }
 
 /* 对没有例句的词重新查一次词典，把例句补进去。
@@ -7227,7 +7265,7 @@ $("ctxMenu").addEventListener("click", async e => {
     toggleDetail($("lib").querySelector(`.rowwrap[data-i="${idx}"]`));
   }
   else if (act === "master" || act === "skip") markAs(idx, act === "master" ? "mastered" : "skipped");
-  else if (act === "unmark") unmark(d.w);
+  else if (act === "unmark") unmark(idx);
   else if (act === "decks") openDeckPick(deckPickX, deckPickY, idx);
   /* 「不再显示」：只是不显示了 —— 词条本体留着，不进已记住也不进垃圾桶。
      只给用户自己来的词（联网查词 / 外部导入）；页面自带的默认词库没有这个菜单项，
@@ -7529,7 +7567,7 @@ attachSwipe($("lib"), {
 attachSwipe($("mList"), {
   selector: ".mrow", threshold: 64,
   allow: { right: { icon: "↩", label: "移回主列表", bg: "var(--swipe-back)" } },
-  onRight: row => unmark(row.closest(".mrowwrap").dataset.w)
+  onRight: row => unmark(+row.closest(".mrowwrap").dataset.i)
 });
 
 /* ============================================================
@@ -7539,11 +7577,12 @@ $("mList").addEventListener("click", async e => {
   if (swallowClick) return;
   const wrap = e.target.closest(".mrowwrap");
   if (!wrap) return;
-  const word = wrap.dataset.w;
+  /* 按 LIB 下标认卡：同一个词形可能有两条（감사하다 형용사 / 동사） */
+  const idx = +wrap.dataset.i;
+  const d = LIB[idx];
   const btn = e.target.closest("button[data-mact]");
-  const d = LIB.find(x => x.w.toLowerCase() === word.toLowerCase());
   if (btn){
-    if (btn.dataset.mact === "restore") unmark(word);
+    if (btn.dataset.mact === "restore") unmark(idx);
     else if (btn.dataset.mact === "say" && d) await speak(d.w, { btn });
     return;
   }
@@ -8475,7 +8514,7 @@ PINNED   = loadPinned();
 /* 删掉的词不该在标记里留下孤儿（否则「已记住 N」会虚高） */
 if (VOCAB_DROP.length){
   const drop = new Set(VOCAB_DROP.map(w => String(w).toLowerCase()));
-  const prune = set => { for (const w of [...set]) if (drop.has(String(w).toLowerCase())) set.delete(w); return set; };
+  const prune = set => { for (const w of [...set]) if (drop.has(String(w).split("|")[0])) set.delete(w); return set; };
   prune(MASTERED); prune(SKIPPED);
   for (const w of Object.keys(PINNED)) if (drop.has(String(w).toLowerCase())) delete PINNED[w];
 }
