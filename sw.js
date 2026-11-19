@@ -1,7 +1,7 @@
 /* 猫猫学英韩语 · 离线缓存
    只拦**同源**请求：联网加词 / 爬词补全走外部域名，原样放行，
    否则在线功能会被缓存逻辑吃掉。 */
-const CACHE = "evc-v4-a93f9842";
+const CACHE = "evc-v4-c635c14b";
 const ASSETS = ["./", "./index.html", "./manifest.webmanifest",
                 "./icon-180.png", "./icon-192.png", "./icon-512.png", "./favicon-32.png"];
 

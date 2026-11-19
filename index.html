@@ -5742,7 +5742,16 @@ function markListWords(){
   const set = currentSet();
   /* 不再显示的词也不该出现在「已记住 / 垃圾桶」面板里 ——
      已存在的标记保持原样（我们不去动那份存储），只是显示时隐藏优先。 */
-  return visibleEntries().filter(d => set.has(String(d.w).toLowerCase()));
+  /* 按**词形**去重：标记本来就是按词形存的，同形词条（감사하다 형용사 / 동사）
+     会给同一个词渲染出两条一模一样的行，而徽标只算 1 个词 —— 对不上。
+     这里只留第一条，面板行数与徽标一致。 */
+  const seen = new Set();
+  return visibleEntries().filter(d => {
+    const w = String(d.w).toLowerCase();
+    if (!set.has(w) || seen.has(w)) return false;
+    seen.add(w);
+    return true;
+  });
 }
 const TAB_LABEL = { mastered: "已记住", skipped: "垃圾桶" };
 
@@ -5834,17 +5843,34 @@ function renderMarkList(){
   }
 }
 
-/* 标记某个词：kind = "mastered" | "skipped"（两类互斥；再点一次 = 取消标记） */
-function markAs(idx, kind){
+/* 标记某个词：kind = "mastered" | "skipped"（两类互斥；再点一次 = 取消标记）
+   opts.noToggle —— 划卡片进来时用。同一个词形可能有多张卡（同形词条：
+   감사하다 有 형용사 / 동사 两条），而标记是按**词形**存的：
+   划第二张时绝不能当成"再点一次取消"，否则两张卡会一起弹回列表
+   （用户报的「划进已记住又立马恢复原状」就是这一条）。 */
+function markAs(idx, kind, opts){
   const d = LIB[idx];
   if (!d) return;
   const w = d.w.toLowerCase();
   const set = kind === "mastered" ? MASTERED : SKIPPED;
-  if (set.has(w)){ unmark(d.w); return; }     // 已经是这个状态 -> 取消
+  const noToggle = !!(opts && opts.noToggle);
+  let saved = true;
 
-  MASTERED.delete(w); SKIPPED.delete(w);      // 互斥
-  set.add(w);
-  const saved = saveMarks();
+  if (set.has(w)){
+    if (!noToggle){ unmark(d.w); return; }   // 卡片上的按钮再点一次 = 取消
+    /* 已经标记过：标记与计数都不动，只把这一行收掉 */
+  } else {
+    MASTERED.delete(w); SKIPPED.delete(w);   // 互斥
+    set.add(w);
+    saved = saveMarks();
+  }
+
+  /* 同一个词形的**所有**卡一起收走。只收被划的那一张的话，
+     另一张会留在列表里，下次划它就走进了上面的取消分支。 */
+  const sameIdx = [];
+  for (let k = 0; k < LIB.length; k++){
+    if (String(LIB[k].w).toLowerCase() === w) sameIdx.push(k);
+  }
 
   const wrap = $("lib").querySelector(`.rowwrap[data-i="${idx}"]`);
 
@@ -5854,9 +5880,6 @@ function markAs(idx, kind){
     row.classList.toggle("mastered", kind === "mastered");
     row.classList.toggle("skipped",  kind === "skipped");
   } else {
-    // 从 filtered 和所属分组里同时摘掉，保证计数一致
-    const pos = filtered.indexOf(idx);
-    if (pos >= 0) filtered.splice(pos, 1);
     /* 分组键必须用 letterOf()，不能自己取首字母：
        韩语组是按**初声**（ㄱ/ㄴ/ㄷ…）分的，词是「가게」，首字母却是「가」——
        自己取首字母就永远找不到那个组，组头那个「N 词」也就不会更新
@@ -5865,9 +5888,14 @@ function markAs(idx, kind){
     const L = letterOf(d.w);
     const g = groups.find(x => x.letter === L);
     if (g){
-      const gi = g.idxs.indexOf(idx);
-      if (gi >= 0) g.idxs.splice(gi, 1);
-      if ((groupShown[L] || 0) > gi) groupShown[L] = groupShown[L] - 1;
+      let gone = 0;
+      for (const ix of sameIdx){
+        const pos = filtered.indexOf(ix);
+        if (pos >= 0){ filtered.splice(pos, 1); gone++; }
+        const gi = g.idxs.indexOf(ix);
+        if (gi >= 0) g.idxs.splice(gi, 1);
+      }
+      if (gone) groupShown[L] = Math.max(0, (groupShown[L] || 0) - gone);
       const cnt = $("lib").querySelector(`.group[data-letter="${L}"] [data-gcount]`);
       /* 「N 词」必须走 tFmt：直接拼 " 词" 的话，日语界面下这个计数会露中文 */
       if (cnt) cnt.textContent = tFmt("{n} 词", g.idxs.length);
@@ -5884,6 +5912,12 @@ function markAs(idx, kind){
        要等下一次整表重画才对。这里顺手把它也刷新掉。
        放在删组之后：整组标完时那块 chip 也该跟着消失。 */
     renderAZBar();
+    // 同形词条的另一张卡：直接摘掉（被划的那张下面还有收拢动画接力）
+    for (const ix of sameIdx){
+      if (ix === idx) continue;
+      $("lib").querySelectorAll(`.rowwrap[data-i="${ix}"]`).forEach(e => e.remove());
+      $("lib").querySelectorAll(`.rowdetail[data-i="${ix}"]`).forEach(e => e.remove());
+    }
     // 展开的例句块和常驻区都要一并移除
     $("lib").querySelectorAll(`.rowdetail[data-i="${idx}"]`).forEach(e => e.remove());
     if (wrap){
@@ -7488,8 +7522,8 @@ attachSwipe($("lib"), {
     left:  { icon: "✓",  label: "已记住",     bg: "var(--swipe-ok)" },
     right: { icon: "🗑️", label: "扔进垃圾桶", bg: "var(--swipe-del)" }
   },
-  onLeft:  row => markAs(+row.dataset.i, "mastered"),
-  onRight: row => markAs(+row.dataset.i, "skipped")
+  onLeft:  row => markAs(+row.dataset.i, "mastered", { noToggle: true }),
+  onRight: row => markAs(+row.dataset.i, "skipped",  { noToggle: true })
 });
 /* 左侧两个列表：右滑 -> 移回主列表 */
 attachSwipe($("mList"), {
