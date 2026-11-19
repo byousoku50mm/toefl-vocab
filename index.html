@@ -461,10 +461,10 @@
   /* 同上 */
   .row.skipped .rw{opacity:.55}
   .rmain{display:flex;flex-wrap:wrap;gap:3px 10px;align-items:baseline;flex:1;min-width:0}
-  .rw{font-weight:700;font-size:20.5px;word-break:break-word}
-  .ripa{color:var(--amber);font-size:18.5px;font-family:"Lucida Sans Unicode",Georgia,serif}
-  .rpos{font-size:17.5px}
-  .rmean{font-size:19px;color:var(--fg);min-width:0;flex:1}
+  .rw{font-weight:700;font-size:22.5px;word-break:break-word}
+  .ripa{color:var(--amber);font-size:20.5px;font-family:"Lucida Sans Unicode",Georgia,serif}
+  .rpos{font-size:19.5px}
+  .rmean{font-size:21px;color:var(--fg);min-width:0;flex:1}
   .racts{display:flex;gap:5px;flex-shrink:0}
   @media (min-width:960px){
     .rw{min-width:191px} .ripa{min-width:176px} .rpos{min-width:58px}
@@ -476,18 +476,18 @@
   }
   /* ---------- 韩语（TOPIK 卡组）专用小标记 ---------- */
   /* 汉字：次要信息，压暗、小一号，跟在词形后面 */
-  .rhanja{font-size:16.5px;color:var(--dim);font-family:"Noto Serif CJK SC","Songti SC",serif}
+  .rhanja{font-size:18.5px;color:var(--dim);font-family:"Noto Serif CJK SC","Songti SC",serif}
   /* 等级徽标已按用户要求从**收起的行**里去掉（等级只留在详情里）。
      .rgrade 这条规则随之删除 —— 留着会被死样式检查抓出来。 */
   /* ---------- TOPIK 行的字号统一 + 四列对齐 ----------
-     ① 词形 / 标准发音 / 中文释义统一 19.5px（原来 20.5 / 18.5 / 19 挤在一行里看着乱）。
-        **词性（.rpos, 17.5px）按用户要求保持原样**，不参与统一。
+     ① 词形 / 标准发音 / 中文释义统一 21.5px（原来 20.5 / 18.5 / 19 挤在一行里看着乱）。
+        **词性（.rpos, 19.5px）按用户要求保持原样**，不参与统一。
      ② 行内改成网格：四列宽度按比例固定，与内容长短无关 ——
         所以「翻译」那一列在所有行里都从同一个 x 开始（原来用 flex，长词会把后面挤歪）。
      只作用于韩语态（body.lang-ko），托福那边的字号与排版维持原设计。 */
   body.lang-ko .rw,
   body.lang-ko .ripa,
-  body.lang-ko .rmean{font-size:19.5px}
+  body.lang-ko .rmean{font-size:21.5px}
   body.lang-ko .rmain{
     display:grid;
     grid-template-columns:minmax(0,1.05fr) minmax(0,1.05fr) 6.2em minmax(0,1.7fr);
@@ -982,21 +982,21 @@
     .rmain{display:flex;flex-wrap:wrap;align-items:baseline;
       column-gap:7px;row-gap:1px;line-height:1.32}
     .rwcell{flex:0 1 auto;max-width:76%}
-    .rw{font-size:19px}
+    .rw{font-size:21px}
     .ripacell{order:1;flex:0 1 auto}
-    .ripa{font-size:15.5px}
-    .rpos{font-size:14.5px;margin-left:auto;order:2}
-    .rmean{flex:1 1 100%;font-size:16.5px;order:3}
+    .ripa{font-size:17.5px}
+    .rpos{font-size:16.5px;margin-left:auto;order:2}
+    .rmean{flex:1 1 100%;font-size:18.5px;order:3}
     /* 韩语态的基础规则是四列网格（body.lang-ko .rmain），选择器更具体，
        所以手机块里必须再写一遍 body.lang-ko 才能压过它 */
     body.lang-ko .rmain{display:flex;flex-wrap:wrap;align-items:baseline;
       column-gap:7px;row-gap:1px;line-height:1.32}
     body.lang-ko .rwcell{max-width:74%}
-    body.lang-ko .rw{font-size:19px}
+    body.lang-ko .rw{font-size:21px}
     body.lang-ko .ripacell{order:1;flex:0 1 auto}
-    body.lang-ko .ripa{font-size:15px}
-    body.lang-ko .rpos{font-size:14px;margin-left:auto;order:2}
-    body.lang-ko .rmean{flex:1 1 100%;font-size:16.5px;order:3}
+    body.lang-ko .ripa{font-size:17px}
+    body.lang-ko .rpos{font-size:16px;margin-left:auto;order:2}
+    body.lang-ko .rmean{flex:1 1 100%;font-size:18.5px;order:3}
     .row{padding:10px 11px 13px;gap:8px;align-items:flex-start}
     .racts{gap:4px}
     .racts .btn{font-size:15px;padding:3px 6px;min-width:32px}
