@@ -3085,6 +3085,7 @@ window.UI_JA = {
   "🐱 猫猫学英韩语 · 发音 · 搜索 · 音变标注": "🐱 猫猫学英韓語 · 発音 · 検索 · 音変化表記",
   "🐱 猫猫学英韩语": "🐱 猫猫学英韓語",
   "，⚠️ 这份备份没有「标记」列（旧版本导出的），学习进度无法恢复": "、⚠️ このバックアップには「マーク」列がありません（旧バージョンで書き出したもの）。学習の進捗は復元できません",
+  "这个标签下没有标记；你的标记在另一套词库里 —— 切到另一个标签就能看到。": "このタブにはマークがありません。マークはもう一方の単語帳にあります —— タブを切り替えると見られます。",
   "关闭": "閉じる",
   "在本列表中筛选…": "このリスト内を絞り込み…",
   "填入 3 行示例": "3行のサンプルを入力",
@@ -5837,8 +5838,20 @@ function renderMarkList(){
         setTimeout(() => el.classList.remove("pop"), 520);
       }
     };
-    bump($("mCount"), MASTERED.size);
-    bump($("sCount"), SKIPPED.size);
+    /* 徽标只数**当前这套词库**里的标记：
+       标记是按词形存的，英语的标记在韩语标签下一条也列不出来，
+       但徽标原来数的是全局集合 —— 于是出现「上面显示 10、下面写着还没标记」的怪画面
+       （用户报的就是这个）。两边口径统一成"当前词库里能看到的标记数"。 */
+    const libKeys = new Set(LIB.map(d => markKey(d)));
+    const libWords = new Set(LIB.map(d => String(d.w).toLowerCase()));
+    const countMarks = set => {
+      let n = 0;
+      for (const k of set) n += (String(k).indexOf("|") >= 0 ? libKeys.has(k) : libWords.has(k)) ? 1 : 0;
+      return n;
+    };
+    const cntM = countMarks(MASTERED), cntS = countMarks(SKIPPED);
+    bump($("mCount"), cntM);
+    bump($("sCount"), cntS);
   /* 图标栏的高亮态跟着当前分区/标签走 */
     const marksOpen = $("sideL").style.display === "flex";
     $("mkBtnM").classList.toggle("on", marksOpen && markTab === "mastered");
@@ -5871,9 +5884,12 @@ function renderMarkList(){
     : `<div class="hint" style="padding:10px 2px">${
         /* 这三句都自带 <br>/<b>，DOM 层拆成多段文本节点后匹配不上整条键，必须走 t() */
         q ? t("没有匹配的词。")
-          : isM
-            ? t("还没有标记任何词。<br>在词库里<b>向左滑动</b>一行，或点行尾的 <b>✓</b>。")
-            : t("垃圾桶是空的。<br>在词库里<b>向右滑动</b>一行，或点行尾的 <b>🗑️</b>。")
+          : ((isM ? cntM : cntS) === 0 && (isM ? MASTERED : SKIPPED).size)
+            /* 有标记，但都在**另一套**词库里（比如在英语里标完，现在开着 TOPIK） */
+            ? t("这个标签下没有标记；你的标记在另一套词库里 —— 切到另一个标签就能看到。")
+            : isM
+              ? t("还没有标记任何词。<br>在词库里<b>向左滑动</b>一行，或点行尾的 <b>✓</b>。")
+              : t("垃圾桶是空的。<br>在词库里<b>向右滑动</b>一行，或点行尾的 <b>🗑️</b>。")
       }</div>`;
 
   $("mStat").innerHTML = all.length
