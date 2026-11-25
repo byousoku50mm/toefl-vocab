@@ -3218,6 +3218,8 @@ window.UI_JA = {
   "保存失败：{n}": "保存に失敗しました：{n}",
   "（文件名 {n}；在系统「文件」App 的「下载」或你刚选的文件夹里。）": "（ファイル名 {n}。端末の「ファイル」アプリの「ダウンロード」、またはいま選んだフォルダーにあります。）",
   "，{n} 条属于 TOPIK 韩语词库（未导入）": "、{n} 件は TOPIK 韓国語単語帳の語（取り込みません）",
+  "，{n} 条恢复为已记住": "、{n} 件を「覚えた」に復元",
+  "，{n} 条恢复为垃圾桶": "、{n} 件をゴミ箱に復元",
   "新卡组的名字（可含 emoji，留空则无图标）：": "新しいデッキの名前（emoji 可。空欄ならアイコンなし）：",
   "清空这个词的手写？文字和图片不受影响。": "この単語の手書きを消去しますか？文字と画像はそのまま残ります。",
   "清空这个词的白板？文字和图片都会删掉。": "この単語のメモボードを消去しますか？文字も画像も削除されます。",
@@ -7647,8 +7649,10 @@ $("mExport").addEventListener("click", () => {
   const all = markListWords();
   if (!all.length){ $("mStat").innerHTML = tFmt("还没有标记为「{n}」的词。", t(TAB_LABEL[markTab])); return; }
   const esc = s => '"' + String(s == null ? "" : s).replace(/"/g, '""') + '"';
-  const rows = [["单词", "音标", "词性", "释义"].map(esc).join(",")];
-  for (const d of all) rows.push([d.w, d.ipa, d.pos, d.mean].map(esc).join(","));
+  /* 第五列带上标记状态：从面板导出的这份文件再导回去，进度也不会丢 */
+  const rows = [["单词", "音标", "词性", "释义", "标记"].map(esc).join(",")];
+  const tag = markTab === "mastered" ? "已记住" : "垃圾桶";
+  for (const d of all) rows.push([d.w, d.ipa, d.pos, d.mean, tag].map(esc).join(","));
   saveTextFile("\uFEFF" + rows.join("\r\n"),
     (markTab === "mastered" ? "mastered-" : "skipped-") + all.length + ".csv", r => {
       renderMarkList();                       /* 先重画列表，别让提示立刻被冲掉 */
@@ -8072,6 +8076,13 @@ function parseCSVLib(text){
     out.push({
       w, ipa: String(r[1] || "").trim(), pos: normPos(String(r[2] || "").trim()),
       mean: String(r[3] || "").trim() || "（无释义）",
+      /* 第五列是导出时写的标记状态（老备份没有这一列，就是空的） */
+      mark: (() => {
+        const m = String(r[4] || "").trim();
+        if (/^(已记住|mastered)$/i.test(m)) return "mastered";
+        if (/^(垃圾桶|skipped|trash)$/i.test(m)) return "skipped";
+        return "";
+      })(),
       syl: w, audio: "", ex: [], src: "import"
     });
   }
@@ -8115,12 +8126,31 @@ $("restoreBtn").addEventListener("click", () => $("csvFile").click());
         else if (one.exists) skipped++;
       }
       if (curLang === "en") LIB = LIB_EN;
+      /* 把备份里的标记状态放回去（第五列）：已记住回已记住、垃圾桶回垃圾桶。
+         没有这一步，"导出 → 重装/换设备 → 导入"会把学习进度清空，
+         看起来就像"什么都没学过"。 */
+      let restoredM = 0, restoredS = 0;
+      const plan = r.list.filter(d => d.mark);
+      if (plan.length){
+        const byW = new Map();
+        for (const d of LIB_EN) byW.set(String(d.w).toLowerCase(), d);
+        for (const d of plan){
+          const e = byW.get(String(d.w).toLowerCase());
+          if (!e) continue;
+          const mk = markKey(e);
+          if (d.mark === "mastered"){ MASTERED.add(mk); SKIPPED.delete(mk); restoredM++; }
+          else { SKIPPED.add(mk); MASTERED.delete(mk); restoredS++; }
+        }
+        saveMarks();
+      }
       const res = store.save();        /* 整批只落一次盘 */
       hayCache = null; exHay = null; byWordCache = null;
       renderAll();
       const fixTxt = baseFixSummary(baseFixNote(r.list));
       const core = tFmt("已从备份恢复：新增 <b>{n}</b> 条", added) +
         (r.dup ? tFmt("，文件内重复 {n} 条", r.dup) : "") +
+        (restoredM ? tFmt("，{n} 条恢复为已记住", restoredM) : "") +
+        (restoredS ? tFmt("，{n} 条恢复为垃圾桶", restoredS) : "") +
         (skipped ? tFmt("，已存在跳过 {n} 条", skipped) : "") +
         (koSkip ? tFmt("，{n} 条属于 TOPIK 韩语词库（未导入）", koSkip) : "") +
         (before ? tFmt("（原有 {n} 条未动）", before) : "") +
@@ -8402,20 +8432,38 @@ $("addBtn").addEventListener("click", async () => {
 $("newWord").addEventListener("keydown", e => { if (e.key === "Enter") $("addBtn").click(); });
 
 /* 导出 / 清空 */
-$("exportBtn").addEventListener("click", () => {
-  if (!LIB_EN.length){ $("storeHint").textContent = "词库为空，无需导出。"; return; }
+/* 导出时把「标记状态」写进 CSV 的第五列，导入时再原样放回去。
+   为什么：CSV 原来只有单词/音标/词性/释义，备份里没有任何学习进度 ——
+   换设备或重装后导入，已记住和垃圾桶全丢，看起来就像"什么都没学过"。
+   列里写中文（人看得懂），导入时中英两种写法都认。 */
+function markTagOf(d){
+  if (isMastered(d)) return "已记住";
+  if (isSkipped(d)) return "垃圾桶";
+  return "";
+}
+/* 生成一份完整备份（导出按钮和测试共用同一段逻辑，避免两处格式跑偏） */
+function backupCSV(){
   const esc = s => '"' + String(s == null ? "" : s).replace(/"/g, '""') + '"';
   const ko = curLang === "ko";
-  const rows = [(ko ? ["单词","标准发音","词性","中文释义"] : ["单词","音标","词性","释义"]).map(esc).join(",")];
   const src = ko ? koreanLib() : LIB_EN;
-  for (const d of src) rows.push([d.w, d.ipa, d.pos, d.mean].map(esc).join(","));
-  const name = (ko ? "topik-vocab-" : "my-vocab-") + src.length + ".csv";
-  saveTextFile("\uFEFF" + rows.join("\r\n"), name, r => {
+  const head = (ko ? ["单词","标准发音","词性","中文释义","标记"] : ["单词","音标","词性","释义","标记"]).map(esc).join(",");
+  const rows = [head];
+  for (const d of src) rows.push([d.w, d.ipa, d.pos, d.mean, markTagOf(d)].map(esc).join(","));
+  return {
+    text: "\uFEFF" + rows.join("\r\n"),
+    name: (ko ? "topik-vocab-" : "my-vocab-") + src.length + ".csv",
+    n: src.length
+  };
+}
+$("exportBtn").addEventListener("click", () => {
+  if (!LIB_EN.length){ $("storeHint").textContent = "词库为空，无需导出。"; return; }
+  const { text, name, n } = backupCSV();
+  saveTextFile(text, name, r => {
     const h = $("storeHint");
     if (r.cancelled){ h.textContent = t("已取消保存。"); return; }
     if (!r.ok){ h.innerHTML = tFmt("保存失败：{n}", r.err || "未知错误"); return; }
     /* 浏览器只会「交给下载」；App 里是原生真的写完了，能把文件名和大概位置说清楚 */
-    h.innerHTML = tFmt("已导出 <b>{n}</b> 条到 CSV。", src.length)
+    h.innerHTML = tFmt("已导出 <b>{n}</b> 条到 CSV。", n)
       + (r.browser ? "" : tFmt("（文件名 {n}；在系统「文件」App 的「下载」或你刚选的文件夹里。）", r.name || name));
   });
 });
