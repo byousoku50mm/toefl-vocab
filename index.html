@@ -4105,11 +4105,17 @@ function togglePin(word, j){
    rows 里每项补上 base 标记，供导入时统计与提示。
    注意：折叠之后可能撞车（obtained 与 obtaining 都变成 obtain），
    按**原型**再查一次重复，并把撞掉的条数并进 dup。 */
-function applyBaseForm(rows){
+/* 把一批解析出来的词条折回原型（parseVocab / parseCSVLib 共用）。
+   `known` = 词库里**已经有**的词形集合：已经在库里的词不折 ——
+   备份里 abortive / absorbing 本来就是独立的词条，折成 abort / absorb 会把
+   「这个名字」弄丢，连带它上面的标记也丢了（用户报的"导回来 10 个只剩 9 个"）。
+   折回原型只对"词库里没有、又明显是变形"的词有意义。 */
+function applyBaseForm(rows, known){
   const out = [], seen = new Set();
   let dup = 0;
   for (const d of (rows || [])){
-    const bf = baseForm(d.w);
+    const w0 = String(d.w == null ? "" : d.w);
+    const bf = (known && known.has(w0.toLowerCase())) ? { base: w0, why: "" } : baseForm(w0);
     if (bf.base && bf.base !== String(d.w).toLowerCase()){
       d.baseChanged = true; d.from = d.w; d.to = bf.base; d.why = bf.why;
       d.w = bf.base;
@@ -4187,7 +4193,9 @@ function parseVocab(text){
     seen.add(key);
     out.push({ w:word, ipa:ipa, pos:pos || "—", mean:mean, syl:word, audio:"", ex:[], src:"import" });
   }
-  const fixed = applyBaseForm(out);
+  /* 已经在库里的词不折回原型（见 applyBaseForm 的注释） */
+  const known = new Set(LIB_EN.map(d => String(d.w).toLowerCase()));
+  const fixed = applyBaseForm(out, known);
   return { list: fixed.list, bad, dup: dup + fixed.dup, total: lines.length };
 }
 
@@ -8087,7 +8095,10 @@ function parseCSVLib(text){
       syl: w, audio: "", ex: [], src: "import"
     });
   }
-  const fixed = applyBaseForm(out);
+  /* 已经在库里的词不折回原型：备份里的 abortive / absorbing 是独立词条，
+     折成 abort / absorb 会把词形和它的标记一起弄丢（"10 个只剩 9 个"）。 */
+  const known = new Set(LIB_EN.map(d => String(d.w).toLowerCase()));
+  const fixed = applyBaseForm(out, known);
   /* 表头是不是带「标记」列：老版本导出的备份没有这一列，导入时要说清楚，
      否则用户只会看到"进度没恢复"，却不知道是文件本身没带。 */
   const hasMarkCol = !!(rows[0] && rows[0].length >= 5);
