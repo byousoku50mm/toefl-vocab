@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <!--
-  离线单文件版 · 由 tools/make-standalone.js 生成于 2026-11-19
+  离线单文件版 · 由 tools/make-standalone.js 生成于 2026-11-25
   把两套词库的全部数据（托福 4510 词 + TOPIK 韩语 5965 词，含例句 / 词性 / 词根 /
   近义反义 / 删除表 / 韩语标准发音与音变）内联进了本文件。
   直接双击就能用，不需要联网、不需要服务器，macOS / Windows / iPad / iPhone / Android 均可。
@@ -6337,7 +6337,7 @@ function hideMenuItemHTML(d){
    「已在词库中」并定位过去（复用 jumpToWord 的闪烁逻辑），不再重复插入。
    返回 { w, from, base, why, added, exists, hidden, res } —— 调用方据此写提示。
    注意：绝不改写用户明确输入的词条对象 —— 只决定"加哪个词形"。 */
-function addWordToLib(word, makeCard){
+function addWordToLib(word, makeCard, opts){
   const from = String(word == null ? "" : word).trim();
   const bf = baseForm(from);
   const w = String(bf.base || from);
@@ -6356,7 +6356,11 @@ function addWordToLib(word, makeCard){
   if (!card) return out;                  // 查不到/构造不出词条：交给调用方如实报错
   out.added = pushEntry(card);
   out.exists = !out.added && found.length > 0;
-  if (out.added) out.res = store.save();
+  /* 批量导入（CSV 恢复 / 粘贴导入）必须传 deferSave：store.save() 每次都要把
+     **整份差异**重新序列化一遍，4500 个词就是 4500 次全量序列化（O(n²)），
+     手机上会直接卡死、被系统杀掉 —— 用户报的「导入 CSV 就崩溃」就是它。
+     循环结束后由调用方统一存一次。 */
+  if (out.added && !(opts && opts.deferSave)) out.res = store.save();
   /* 词条在库里但现在被「不再显示」藏着：如实报出来，否则用户以为"加进去了却看不见" */
   out.hidden = hiddenOf(w);
   return out;
@@ -8084,13 +8088,13 @@ $("restoreBtn").addEventListener("click", () => $("csvFile").click());
       let added = 0, hidden = 0, skipped = 0;
       /* 走统一入口：原型还原 + 重复检查都在里面 */
       for (const d of r.list){
-        const one = addWordToLib(d.w, () => d);
+        const one = addWordToLib(d.w, () => d, { deferSave: true });
         if (one.added){ added++; if (one.hidden) hidden++; }
         else if (one.hidden) skipped++;
         else if (one.exists) skipped++;
       }
       if (curLang === "en") LIB = LIB_EN;
-      const res = store.save();
+      const res = store.save();        /* 整批只落一次盘 */
       hayCache = null; exHay = null; byWordCache = null;
       renderAll();
       const fixTxt = baseFixSummary(baseFixNote(r.list));
@@ -8127,12 +8131,12 @@ $("importBtn").addEventListener("click", () => {
   let added = 0, skipped = 0, hidden = 0;
   /* 走统一入口：原型还原（obtained → obtain）+ 重复检查 */
   for (const d of r.list){
-    const one = addWordToLib(d.w, () => d);
+    const one = addWordToLib(d.w, () => d, { deferSave: true });
     if (one.added){ added++; if (one.hidden) hidden++; }
     else { skipped++; if (one.hidden) hidden++; }
   }
   if (curLang === "en") LIB = LIB_EN;
-  const res = store.save();
+  const res = store.save();          /* 整批只落一次盘 */
   renderAll();
 
   const fixTxt = baseFixSummary(baseFixNote(r.list));
