@@ -6326,13 +6326,18 @@ function pushEntry(d){
   const kind = (src === "dict" || src === "import") ? src : "";
   for (const x of LIB_EN){
     if (String(x.w).toLowerCase() !== k) continue;
-    if (kind && kind === String(x.src || "").toLowerCase()) return false;   // 同源重复
+    /* 词库里已经有这个词了（**任何来源**）：
+       · 内置那份 → 收归用户（内容不动），算这次真的加进来了
+       · 其它来源（ielts / dict / import / rel）→ 已经有了，绝不再 push 一条。
+         原来只挡 builtin 和「同源重复」，于是「导入自己的备份」会把雅思那 2375 个词
+         各复制一份（整库从 6885 涨到 9308，列表里出现两张一样的卡）——
+         用户报的「导入后卡片多出来/消失」就是这个。 */
     if (kind && String(x.src || "").toLowerCase() === "builtin"){
       x.src = kind;                    // 内置那份收归用户所有（内容不动）
       hayCache = null; exHay = null; byWordCache = null; visibleCache = null;
       return true;
     }
-    if (!kind && String(x.src || "").toLowerCase() === "builtin") return false;
+    return false;
   }
   LIB_EN.push(d);
   hayCache = null; exHay = null; byWordCache = null; visibleCache = null;
@@ -8518,6 +8523,23 @@ LIB_EN = LIB_EN.filter(d => d.src !== "rel");
    合并只改 LIB_EN，用户标记 / 已记住 / 跳过 / 笔记 / 卡组这些都在 localStorage 里，
    按词形索引，合并前后一个都不动。 */
 window.__mergedCount = mergeExamLib();
+/* ---- 同一个词形只留一条 ----
+   老版本导入自己的备份时，雅思那批词会被再 push 一份（见 pushEntry 的注释），
+   于是列表里出现两张一模一样的卡、徽标也算两遍。这里按词形去重：
+   同一个词留「例句最多」的那条（通常是原表那条），一样多就留先来的。
+   去重是幂等的，重复跑不会丢东西。 */
+(function dedupeLib(){
+  const best = new Map();
+  for (const d of LIB_EN){
+    const k = String(d.w).toLowerCase();
+    const cur = best.get(k);
+    if (!cur || (d.ex || []).length > (cur.ex || []).length) best.set(k, d);
+  }
+  if (best.size !== LIB_EN.length){
+    window.__deduped = LIB_EN.length - best.size;
+    LIB_EN = [...best.values()];
+  }
+})();
 /* ---- 冷义项清理（vocab-gloss-clean.js）----
    走「启动时对最终词库覆写」这条路，而不是只改 vocab-lib.js：
    vocab-lib.js 只在词库为空时装填，老用户的词表在 localStorage 里，改数据文件动不了它。
