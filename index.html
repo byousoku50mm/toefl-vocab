@@ -3084,6 +3084,7 @@ window.UI_JA = {
   "🐱 猫猫学英韩语 · 发音 · 搜索 · 批量导入": "🐱 猫猫学英韓語 · 発音 · 検索 · 一括インポート",
   "🐱 猫猫学英韩语 · 发音 · 搜索 · 音变标注": "🐱 猫猫学英韓語 · 発音 · 検索 · 音変化表記",
   "🐱 猫猫学英韩语": "🐱 猫猫学英韓語",
+  "，⚠️ 这份备份没有「标记」列（旧版本导出的），学习进度无法恢复": "、⚠️ このバックアップには「マーク」列がありません（旧バージョンで書き出したもの）。学習の進捗は復元できません",
   "关闭": "閉じる",
   "在本列表中筛选…": "このリスト内を絞り込み…",
   "填入 3 行示例": "3行のサンプルを入力",
@@ -8087,7 +8088,10 @@ function parseCSVLib(text){
     });
   }
   const fixed = applyBaseForm(out);
-  return { list: fixed.list, bad, dup: dup + fixed.dup, total: rows.length };
+  /* 表头是不是带「标记」列：老版本导出的备份没有这一列，导入时要说清楚，
+     否则用户只会看到"进度没恢复"，却不知道是文件本身没带。 */
+  const hasMarkCol = !!(rows[0] && rows[0].length >= 5);
+  return { list: fixed.list, bad, dup: dup + fixed.dup, total: rows.length, hasMarkCol };
 }
 
 /* 导入 `/`/* 导入 */
@@ -8151,6 +8155,7 @@ $("restoreBtn").addEventListener("click", () => $("csvFile").click());
         (r.dup ? tFmt("，文件内重复 {n} 条", r.dup) : "") +
         (restoredM ? tFmt("，{n} 条恢复为已记住", restoredM) : "") +
         (restoredS ? tFmt("，{n} 条恢复为垃圾桶", restoredS) : "") +
+        (!r.hasMarkCol ? t("，⚠️ 这份备份没有「标记」列（旧版本导出的），学习进度无法恢复") : "") +
         (skipped ? tFmt("，已存在跳过 {n} 条", skipped) : "") +
         (koSkip ? tFmt("，{n} 条属于 TOPIK 韩语词库（未导入）", koSkip) : "") +
         (before ? tFmt("（原有 {n} 条未动）", before) : "") +
