@@ -3217,6 +3217,7 @@ window.UI_JA = {
   "{n} → {n}（{n}，已按原型加入）": "{n} → {n}（{n}、原形で追加しました）",
   "保存失败：{n}": "保存に失敗しました：{n}",
   "（文件名 {n}；在系统「文件」App 的「下载」或你刚选的文件夹里。）": "（ファイル名 {n}。端末の「ファイル」アプリの「ダウンロード」、またはいま選んだフォルダーにあります。）",
+  "，{n} 条属于 TOPIK 韩语词库（未导入）": "、{n} 件は TOPIK 韓国語単語帳の語（取り込みません）",
   "新卡组的名字（可含 emoji，留空则无图标）：": "新しいデッキの名前（emoji 可。空欄ならアイコンなし）：",
   "清空这个词的手写？文字和图片不受影响。": "この単語の手書きを消去しますか？文字と画像はそのまま残ります。",
   "清空这个词的白板？文字和图片都会删掉。": "この単語のメモボードを消去しますか？文字も画像も削除されます。",
@@ -3871,6 +3872,19 @@ function foldOldLibrary(old){
   };
 }
 
+/* 「这个词属于 TOPIK 韩语词库吗？」
+   为什么需要：韩语词库导出成 CSV 之后，如果拿回「从 CSV 备份恢复」里，
+   导入路径只认 LIB_EN —— 会把 5543 条韩语词一股脑塞进英语词库
+   （用户报的「怎么直接上万了 / 例句缺 5543」就是这个）。
+   这类词一律不收：导入时跳过，老数据里已经混进去的在 load 时滤掉。 */
+let koWordSet = null;
+function isKoreanWord(w){
+  const s = String(w == null ? "" : w);
+  if (!/[\uac00-\ud7a3]/.test(s)) return false;         // 连韩文都没有，肯定不是
+  if (!koWordSet) koWordSet = new Set(koreanLib().map(d => String(d.w).toLowerCase()));
+  return koWordSet.has(s.toLowerCase());
+}
+
 const store = {
   load(){
     const builtin = builtinLib();
@@ -3909,7 +3923,7 @@ const store = {
       if (d && d.w) deltaAdded[String(d.w).toLowerCase()] = d;
     }
     const added = (delta.added || []).map(expand).map(normalizeEntry)
-      .filter(d => d && d.w && !bset.has(String(d.w).toLowerCase()));
+      .filter(d => d && d.w && !bset.has(String(d.w).toLowerCase()) && !isKoreanWord(d.w));
     const out = builtin.filter(d => !removed.has(d.w.toLowerCase()));
     for (const d of added) out.push(d);
     return out;
@@ -8085,9 +8099,11 @@ $("restoreBtn").addEventListener("click", () => $("csvFile").click());
         return;
       }
       const before = LIB_EN.length;
-      let added = 0, hidden = 0, skipped = 0;
+      let added = 0, hidden = 0, skipped = 0, koSkip = 0;
       /* 走统一入口：原型还原 + 重复检查都在里面 */
       for (const d of r.list){
+        /* 韩语词库的备份不能往英语词库里灌（会多出 5543 条没有例句的韩语词） */
+        if (isKoreanWord(d.w)){ koSkip++; continue; }
         const one = addWordToLib(d.w, () => d, { deferSave: true });
         if (one.added){ added++; if (one.hidden) hidden++; }
         else if (one.hidden) skipped++;
@@ -8101,6 +8117,7 @@ $("restoreBtn").addEventListener("click", () => $("csvFile").click());
       const core = tFmt("已从备份恢复：新增 <b>{n}</b> 条", added) +
         (r.dup ? tFmt("，文件内重复 {n} 条", r.dup) : "") +
         (skipped ? tFmt("，已存在跳过 {n} 条", skipped) : "") +
+        (koSkip ? tFmt("，{n} 条属于 TOPIK 韩语词库（未导入）", koSkip) : "") +
         (before ? tFmt("（原有 {n} 条未动）", before) : "") +
         (res.ok ? "" : tFmt("　⚠️ 保存失败：{n}", res.err));
       $("parseHint").innerHTML = /按原型加入/.test(fixTxt) ? fixTxt + "。" + core : core;
@@ -8128,9 +8145,11 @@ $("importBtn").addEventListener("click", () => {
   const r = parseVocab($("bulkText").value);
   if (!r.list.length){ $("parseHint").innerHTML = "没有解析到任何词条。请确认粘贴的是「单词 + 音标/释义」格式。"; $("parseHint").className = "hint err"; return; }
 
-  let added = 0, skipped = 0, hidden = 0;
+  let added = 0, skipped = 0, hidden = 0, koSkip = 0;
   /* 走统一入口：原型还原（obtained → obtain）+ 重复检查 */
   for (const d of r.list){
+    /* 韩语词库的备份不能往英语词库里灌（同样会多出几千条没有例句的韩语词） */
+    if (isKoreanWord(d.w)){ koSkip++; continue; }
     const one = addWordToLib(d.w, () => d, { deferSave: true });
     if (one.added){ added++; if (one.hidden) hidden++; }
     else { skipped++; if (one.hidden) hidden++; }
@@ -8142,6 +8161,7 @@ $("importBtn").addEventListener("click", () => {
   const fixTxt = baseFixSummary(baseFixNote(r.list));
   $("parseHint").innerHTML = tFmt("✅ 新增 <b>{n}</b> 条", added) +
     (skipped ? tFmt("，已存在跳过 {n} 条", skipped) : "") +
+    (koSkip ? tFmt("，{n} 条属于 TOPIK 韩语词库（未导入）", koSkip) : "") +
     (hidden ? tFmt("，其中 {n} 条当前处于不再显示状态", hidden) : "") +
     (r.bad ? tFmt("，无法识别 {n} 行", r.bad) : "") +
     (res.ok ? "" : tFmt(" ⚠️ 保存失败：{n}（请立即「导出备份」）", res.err)) +
